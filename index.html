@@ -22,7 +22,6 @@
     --c-hungry:  #78350f;  --c-hungry-fill:#f59e0b;
     --c-thirsty: #164e63;  --c-thirsty-fill:#06b6d4;
     --c-help:    #7f1d1d;  --c-help-fill:  #f97316;
-
     --c-kb:      #1e3a5f;  --c-kb-fill:   #3b82f6;
     --c-prompts: #166534;  --c-prompts-fill:#22c55e;
     --c-speak:   #4c1d95;  --c-speak-fill: #a855f7;
@@ -32,10 +31,8 @@
     background: var(--bg);
     color: var(--text);
     font-family: 'Segoe UI', system-ui, sans-serif;
-    height: 100vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column;
   }
 
   /* ══════════════════════════════════════════
@@ -45,54 +42,82 @@
     position: fixed; inset: 0;
     background: var(--bg);
     z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    padding-top: 28px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-start;
+    padding-top: 24px;
   }
+  #calibration-screen h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 6px; }
+  #calibration-screen p  { color: var(--muted); font-size: 0.95rem; text-align: center; max-width: 520px; line-height: 1.6; margin-bottom: 4px; }
+  #calibration-screen .hint { font-size: 0.8rem; color: #3a5070; margin-bottom: 14px; }
 
-  #calibration-screen h1 {
-    font-size: 1.6rem; font-weight: 700;
-    color: var(--text); margin-bottom: 8px;
+  #cal-bar-wrap {
+    width: 320px; height: 8px;
+    background: var(--surface); border-radius: 4px;
+    overflow: hidden; margin-bottom: 6px;
   }
-  #calibration-screen p {
-    color: var(--muted); font-size: 1rem;
-    text-align: center; max-width: 540px;
-    line-height: 1.6; margin-bottom: 4px;
-  }
-  #calibration-screen .hint {
-    font-size: 0.82rem; color: #4a6080; margin-bottom: 18px;
-  }
-  #calibration-progress {
-    font-size: 0.9rem; color: var(--muted); margin-bottom: 4px;
-  }
-  #cal-status {
-    font-size: 0.82rem; color: #4a9060; min-height: 1.2em; margin-bottom: 4px;
+  #cal-bar { height: 100%; width: 0%; background: #3b82f6; border-radius: 4px; transition: width 0.3s; }
+  #calibration-progress { font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; }
+  #cal-status { font-size: 0.82rem; color: #4a9060; min-height: 1.2em; }
+
+  /* calibration phase label */
+  #cal-phase {
+    margin-top: 6px; margin-bottom: 0;
+    font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #4a6a9a;
   }
 
   .cal-dot {
-    width: 48px; height: 48px;
-    border-radius: 50%;
-    background: #1e3a5f;
-    border: 3px solid #3b82f6;
-    position: absolute;
-    cursor: pointer;
-    transition: transform 0.15s, background 0.15s;
+    width: 52px; height: 52px; border-radius: 50%;
+    position: absolute; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    font-size: 0.75rem; font-weight: 700; color: #7aa8f0;
+    font-size: 0.78rem; font-weight: 700;
+    transition: transform 0.15s, background 0.15s;
   }
-  .cal-dot:hover  { transform: scale(1.15); background: #3b82f6; color: #fff; }
-  .cal-dot.done   { background: #166534; border-color: #22c55e; color: #fff; }
-  .cal-dot.active { animation: pulse-dot 0.7s infinite alternate; }
+  /* Phase 1: click to calibrate (blue) */
+  .cal-dot.phase-click {
+    background: #1e3a5f; border: 3px solid #3b82f6; color: #7aa8f0;
+  }
+  .cal-dot.phase-click:hover { transform: scale(1.15); background: #3b82f6; color: #fff; }
+  .cal-dot.phase-click.active { animation: pulse-dot 0.7s infinite alternate; }
+  .cal-dot.done { background: #166534; border: 3px solid #22c55e; color: #fff; }
+
+  /* Phase 2: look-only accuracy dots (orange) */
+  .cal-dot.phase-look {
+    background: #78350f; border: 3px solid #f59e0b; color: #fcd34d;
+    pointer-events: none; /* no click needed, just look */
+  }
+  .cal-dot.phase-look.active { animation: pulse-orange 0.7s infinite alternate; }
+  .cal-dot.phase-look.done { background: #166534; border-color: #22c55e; color: #fff; }
 
   @keyframes pulse-dot {
     from { box-shadow: 0 0 0 0 rgba(59,130,246,0.7); }
-    to   { box-shadow: 0 0 0 18px rgba(59,130,246,0); }
+    to   { box-shadow: 0 0 0 20px rgba(59,130,246,0); }
+  }
+  @keyframes pulse-orange {
+    from { box-shadow: 0 0 0 0 rgba(245,158,11,0.7); }
+    to   { box-shadow: 0 0 0 20px rgba(245,158,11,0); }
+  }
+
+  /* Mini webcam preview during calibration — show full face, no clipping */
+  #cal-video-wrap {
+    position: absolute; bottom: 16px; left: 16px;
+    width: 200px; height: 150px;
+    border: 2px solid var(--border); border-radius: 10px;
+    overflow: hidden; background: #000;
+  }
+  /* WebGazer video inside that wrap — scale down to fit */
+  #cal-video-wrap video,
+  #cal-video-wrap canvas {
+    position: absolute !important;
+    top: 50% !important; left: 50% !important;
+    transform: translate(-50%, -50%) scale(0.31) !important;
+    transform-origin: center center !important;
+    width: 640px !important; height: 480px !important;
+    max-width: none !important;
   }
 
   #skip-cal {
-    position: absolute; bottom: 28px; right: 32px;
+    position: absolute; bottom: 22px; right: 28px;
     background: transparent; border: 1px solid var(--border);
     color: var(--muted); padding: 8px 20px;
     border-radius: 8px; cursor: pointer; font-size: 0.9rem;
@@ -103,19 +128,13 @@
      MAIN APP
   ══════════════════════════════════════════ */
   #app {
-    display: none;
-    flex-direction: column;
-    height: 100vh;
-    padding: 12px;
-    gap: 10px;
+    display: none; flex-direction: column;
+    height: 100vh; padding: 12px; gap: 10px;
   }
 
   #topbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-shrink: 0;
-    height: 64px;
+    display: flex; justify-content: space-between;
+    align-items: center; flex-shrink: 0; height: 64px;
   }
 
   .ctx-btn {
@@ -126,37 +145,29 @@
     user-select: none; transition: opacity 0.2s;
   }
   .ctx-btn.disabled { opacity: 0.25; pointer-events: none; }
-
   #btn-prompts  { background: var(--c-prompts);  border-color: var(--c-prompts-fill); color: #fff; }
   #btn-keyboard { background: var(--c-kb);        border-color: var(--c-kb-fill);      color: #fff; }
 
   #content {
     flex: 1; display: flex;
-    align-items: center; justify-content: center;
-    min-height: 0;
+    align-items: center; justify-content: center; min-height: 0;
   }
 
-  /* ══════════════════════════════════════════
-     PROMPTS GRID
-  ══════════════════════════════════════════ */
+  /* Prompts */
   #prompts-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     grid-template-rows: repeat(2, 1fr);
-    gap: 14px;
-    width: 100%; max-width: 1100px;
+    gap: 14px; width: 100%; max-width: 1100px;
     height: 100%; max-height: 480px;
   }
 
-  /* ══════════════════════════════════════════
-     KEYBOARD VIEW
-  ══════════════════════════════════════════ */
+  /* Keyboard */
   #keyboard-view {
     display: none; flex-direction: column;
     align-items: center; gap: 10px;
     width: 100%; max-width: 1100px;
   }
-
   #typed-text {
     width: 100%; min-height: 72px;
     background: var(--surface); border: 2px solid var(--border);
@@ -171,12 +182,11 @@
     animation: blink 1s step-end infinite;
   }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-
   #kb-rows { display: flex; flex-direction: column; gap: 8px; width: 100%; }
   .kb-row  { display: flex; justify-content: center; gap: 8px; }
 
   /* ══════════════════════════════════════════
-     DWELL BUTTON (shared)
+     DWELL BUTTON
   ══════════════════════════════════════════ */
   .dwell-btn {
     position: relative; overflow: hidden;
@@ -187,39 +197,30 @@
     transition: transform 0.1s;
   }
   .dwell-btn:active { transform: scale(0.97); }
-
   .dwell-btn .fill {
     position: absolute; inset: 0; width: 0%;
     transition: none; z-index: 0; border-radius: 13px;
   }
   .dwell-btn .label { position: relative; z-index: 1; pointer-events: none; }
-
   .dwell-btn.triggered { animation: flash-btn 0.35s ease; }
-  @keyframes flash-btn {
-    0%  { filter: brightness(1); }
-    40% { filter: brightness(2.2); }
-    100%{ filter: brightness(1); }
-  }
+  @keyframes flash-btn { 0%{filter:brightness(1)} 40%{filter:brightness(2.2)} 100%{filter:brightness(1)} }
 
   .prompt-btn { font-size: clamp(1.4rem, 2.8vw, 2.2rem); }
 
-  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-     KEY BUTTON SIZE — adjust width/height here
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     KEY BUTTON SIZE — adjust here
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
   .key-btn        { width: 84px;  height: 74px; font-size: 1.25rem; border-radius: 12px; flex-shrink: 0; }
-  .key-btn.wide   { width: 140px; }   /* ⌫ */
-  .key-btn.wider  { width: 260px; }   /* ESPAÇO */
+  .key-btn.wide   { width: 140px; }
+  .key-btn.wider  { width: 260px; }
 
   #btn-speak {
-    align-self: flex-end; width: 180px; height: 56px;
-    font-size: 1rem;
+    align-self: flex-end; width: 180px; height: 56px; font-size: 1rem;
     background: var(--c-speak); border-color: var(--c-speak-fill); color: #fff;
   }
   #btn-speak .fill { background: var(--c-speak-fill); }
 
-  /* ══════════════════════════════════════════
-     BOTTOM BAR
-  ══════════════════════════════════════════ */
+  /* Bottom bar */
   #bottombar {
     flex-shrink: 0; display: flex;
     justify-content: flex-end; align-items: center;
@@ -241,48 +242,70 @@
   }
   .speed-btn:hover { background: var(--border); border-color: var(--muted); }
 
-  /* Gaze dot indicator */
+  /* Gaze dot */
   #gaze-dot {
-    position: fixed; width: 18px; height: 18px;
-    border-radius: 50%; background: rgba(96,165,250,0.7);
-    border: 2px solid #fff; pointer-events: none;
-    transform: translate(-50%,-50%);
+    position: fixed; width: 20px; height: 20px; border-radius: 50%;
+    background: rgba(96,165,250,0.75); border: 2px solid #fff;
+    pointer-events: none; transform: translate(-50%,-50%);
     z-index: 900; display: none;
-    transition: left 0.05s linear, top 0.05s linear;
   }
 
-  /* WebGazer video small + tucked */
+  /* ══════════════════════════════════════════
+     WEBGAZER VIDEO — main app: bottom-left, full face
+     We DON'T clip it; we scale it inside its container
+  ══════════════════════════════════════════ */
   #webgazerVideoContainer {
     position: fixed !important;
-    bottom: 60px !important; left: 8px !important;
-    width: 160px !important; height: 120px !important;
-    opacity: 0.55; border-radius: 8px; overflow: hidden; z-index: 500;
+    bottom: 56px !important; left: 8px !important;
+    width: 200px !important; height: 150px !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    background: #000 !important;
+    overflow: hidden !important;
+    z-index: 500 !important;
+    opacity: 0.7 !important;
+  }
+  /* Scale the actual video/canvas DOWN to fit inside 200×150 */
+  #webgazerVideoContainer video,
+  #webgazerVideoContainer canvas {
+    position: absolute !important;
+    top: 50% !important; left: 50% !important;
+    transform: translate(-50%, -50%) scale(0.31) !important;
+    transform-origin: center center !important;
+    width: 640px !important; height: 480px !important;
+    max-width: none !important;
   }
   #webgazerFaceOverlay, #webgazerFaceFeedbackBox { display: none !important; }
 </style>
 </head>
 <body>
 
-<!-- GAZE DOT -->
 <div id="gaze-dot"></div>
 
-<!-- ═══════════════════════════════════════════════
-     CALIBRATION SCREEN
-═══════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════
+     CALIBRATION
+═══════════════════════════════════════ -->
 <div id="calibration-screen">
   <h1>Calibração do Olhar</h1>
-  <p>Olhe diretamente para cada ponto e <strong>clique nele</strong>.<br>
-     Clique em todos os 9 pontos para melhor precisão.</p>
-  <p class="hint">Mantenha a cabeça relativamente estável. A câmera já está ativa.</p>
+  <p id="cal-instruction">
+    <strong>Fase 1:</strong> Olhe para cada ponto azul e <strong>clique nele</strong>.<br>
+    Clique em todos os 9 pontos enquanto olha diretamente para eles.
+  </p>
+  <p class="hint">Mantenha a cabeça estável. A câmera já está ativa — veja abaixo à esquerda.</p>
+  <div id="cal-bar-wrap"><div id="cal-bar"></div></div>
   <div id="calibration-progress">0 / 9 pontos</div>
-  <div id="cal-status"></div>
-  <!-- dots injected by JS -->
+  <div id="cal-status">Iniciando câmera…</div>
+  <div id="cal-phase">FASE 1 — CALIBRAÇÃO</div>
+
+  <!-- webcam preview during calibration -->
+  <div id="cal-video-wrap"></div>
+
   <button id="skip-cal">Pular calibração</button>
 </div>
 
-<!-- ═══════════════════════════════════════════════
+<!-- ═══════════════════════════════════════
      MAIN APP
-═══════════════════════════════════════════════ -->
+═══════════════════════════════════════ -->
 <div id="app">
   <div id="topbar">
     <div id="btn-prompts" class="ctx-btn dwell-btn disabled">
@@ -317,9 +340,9 @@
 
 <script src="https://cdn.jsdelivr.net/npm/webgazer@2.1.0/dist/webgazer.min.js"></script>
 <script>
-/* ═══════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    CONFIG
-═══════════════════════════════════════════════════ */
+═══════════════════════════════════════ */
 let dwellTime = 1000;
 
 const PROMPTS = [
@@ -340,9 +363,9 @@ const KB_ROWS = [
   ['ESPAÇO'],
 ];
 
-/* ═══════════════════════════════════════════════════
-   SPEECH (pt-BR)
-═══════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════
+   SPEECH
+═══════════════════════════════════════ */
 function speak(text) {
   if (!window.speechSynthesis) return;
   speechSynthesis.cancel();
@@ -356,9 +379,9 @@ function speak(text) {
 }
 if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => {};
 
-/* ═══════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    DWELL ENGINE
-═══════════════════════════════════════════════════ */
+═══════════════════════════════════════ */
 function makeDwellBtn(el, onTrigger) {
   const fillEl = el.querySelector('.fill');
 
@@ -366,24 +389,19 @@ function makeDwellBtn(el, onTrigger) {
     if (el._clicked || el._dwelling) return;
     el._dwelling = true;
     el._start = performance.now();
-
     function tick(now) {
       if (!el._dwelling) return;
       const elapsed = now - el._start;
       const pct = Math.min(elapsed / dwellTime * 100, 100);
       fillEl.style.transition = 'none';
       fillEl.style.width = pct + '%';
-
       if (elapsed >= dwellTime) {
-        el._clicked = true;
-        el._dwelling = false;
+        el._clicked = true; el._dwelling = false;
         fillEl.style.width = '100%';
         el.classList.add('triggered');
         setTimeout(() => el.classList.remove('triggered'), 400);
         onTrigger(el);
-      } else {
-        el._timer = requestAnimationFrame(tick);
-      }
+      } else { el._timer = requestAnimationFrame(tick); }
     }
     el._timer = requestAnimationFrame(tick);
   }
@@ -397,14 +415,9 @@ function makeDwellBtn(el, onTrigger) {
     }
   }
 
-  function onEnter() {
-    el._hovered = true;
-    if (!el._clicked) startDwell();
-  }
-
+  function onEnter() { el._hovered = true; if (!el._clicked) startDwell(); }
   function onLeave() {
-    el._hovered = false;
-    el._clicked = false;
+    el._hovered = false; el._clicked = false;
     stopDwell();
     fillEl.style.transition = 'width 0.2s ease';
     fillEl.style.width = '0%';
@@ -416,9 +429,9 @@ function makeDwellBtn(el, onTrigger) {
   el._gazeLeave = onLeave;
 }
 
-/* ═══════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    BUILD PROMPTS
-═══════════════════════════════════════════════════ */
+═══════════════════════════════════════ */
 const promptsGrid = document.getElementById('prompts-grid');
 PROMPTS.forEach(p => {
   const btn = document.createElement('div');
@@ -429,9 +442,9 @@ PROMPTS.forEach(p => {
   makeDwellBtn(btn, () => speak(p.speak));
 });
 
-/* ═══════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    BUILD KEYBOARD
-═══════════════════════════════════════════════════ */
+═══════════════════════════════════════ */
 const kbRows = document.getElementById('kb-rows');
 let typedText = '';
 function updateTyped() { document.getElementById('typed-span').textContent = typedText; }
@@ -447,7 +460,7 @@ KB_ROWS.forEach(row => {
     btn.style.cssText = 'background:#1a2535;border-color:#4dd0e1;color:#fff';
     btn.innerHTML = `<div class="fill" style="background:#4dd0e1;opacity:0.6"></div><span class="label">${key}</span>`;
     makeDwellBtn(btn, () => {
-      if (key === '⌫')       typedText = typedText.slice(0, -1);
+      if (key === '⌫')           typedText = typedText.slice(0, -1);
       else if (key === 'ESPAÇO') typedText += ' ';
       else                       typedText += key;
       updateTyped();
@@ -457,39 +470,36 @@ KB_ROWS.forEach(row => {
   kbRows.appendChild(rowEl);
 });
 
-/* ═══════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    SPEAK BUTTON
-═══════════════════════════════════════════════════ */
-const btnSpeak = document.getElementById('btn-speak');
-makeDwellBtn(btnSpeak, () => { if (typedText.trim()) speak(typedText.trim()); });
+═══════════════════════════════════════ */
+makeDwellBtn(document.getElementById('btn-speak'), () => {
+  if (typedText.trim()) speak(typedText.trim());
+});
 
-/* ═══════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    CONTEXT SWITCHING
-═══════════════════════════════════════════════════ */
+═══════════════════════════════════════ */
 const btnPrompts  = document.getElementById('btn-prompts');
 const btnKeyboard = document.getElementById('btn-keyboard');
 const promptsView = document.getElementById('prompts-grid');
 const keyboardView= document.getElementById('keyboard-view');
 
 function showPrompts() {
-  promptsView.style.display = 'grid';
-  keyboardView.style.display = 'none';
-  btnPrompts.classList.add('disabled');
-  btnKeyboard.classList.remove('disabled');
+  promptsView.style.display = 'grid'; keyboardView.style.display = 'none';
+  btnPrompts.classList.add('disabled'); btnKeyboard.classList.remove('disabled');
 }
 function showKeyboard() {
-  promptsView.style.display = 'none';
-  keyboardView.style.display = 'flex';
-  btnKeyboard.classList.add('disabled');
-  btnPrompts.classList.remove('disabled');
+  promptsView.style.display = 'none'; keyboardView.style.display = 'flex';
+  btnKeyboard.classList.add('disabled'); btnPrompts.classList.remove('disabled');
 }
 makeDwellBtn(btnPrompts,  showPrompts);
 makeDwellBtn(btnKeyboard, showKeyboard);
 showPrompts();
 
-/* ═══════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    DWELL SPEED CONTROL
-═══════════════════════════════════════════════════ */
+═══════════════════════════════════════ */
 const dwellDisplay = document.getElementById('dwell-display');
 document.getElementById('speed-up').addEventListener('click', () => {
   dwellTime = Math.min(dwellTime + 100, 5000); dwellDisplay.textContent = dwellTime + ' ms';
@@ -498,39 +508,44 @@ document.getElementById('speed-down').addEventListener('click', () => {
   dwellTime = Math.max(dwellTime - 100, 100); dwellDisplay.textContent = dwellTime + ' ms';
 });
 
-/* ═══════════════════════════════════════════════════
-   WEBGAZER — starts immediately on page load
-   so calibration dot clicks feed real data to it
-═══════════════════════════════════════════════════ */
-const gazeDot = document.getElementById('gaze-dot');
+/* ═══════════════════════════════════════
+   WEBGAZER SETUP
+   - Starts immediately so calibration clicks register
+   - saveDataAcrossSessions = true (accumulates training data)
+   - Gaze smoothing buffer to reduce jitter
+═══════════════════════════════════════ */
+window.saveDataAcrossSessions = true;
 
-// Smoothing buffer: average last N gaze points to reduce jitter
-const SMOOTH_N = 6;
+const gazeDot = document.getElementById('gaze-dot');
+const SMOOTH_N = 8;
 const gazeBuffer = [];
 let gazeCurrentEl = null;
 
-function smoothedGaze(x, y) {
+function smoothGaze(x, y) {
   gazeBuffer.push({ x, y });
   if (gazeBuffer.length > SMOOTH_N) gazeBuffer.shift();
-  const avg = gazeBuffer.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), { x:0, y:0 });
-  return { x: avg.x / gazeBuffer.length, y: avg.y / gazeBuffer.length };
+  const s = gazeBuffer.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), { x:0, y:0 });
+  return { x: s.x / gazeBuffer.length, y: s.y / gazeBuffer.length };
 }
 
-// Walk up from any child element to find the nearest .dwell-btn
 function dwellBtnAt(x, y) {
   const el = document.elementFromPoint(x, y);
   if (!el) return null;
   return el.closest('.dwell-btn:not(.disabled)');
 }
 
+let gazeListenerActive = false;
+
 function onGaze(data) {
   if (!data) return;
-  const { x, y } = smoothedGaze(data.x, data.y);
+  const { x, y } = smoothGaze(data.x, data.y);
 
-  // show gaze dot
+  // always show gaze dot
   gazeDot.style.display = 'block';
   gazeDot.style.left = x + 'px';
   gazeDot.style.top  = y + 'px';
+
+  if (!gazeListenerActive) return; // don't trigger buttons during calibration
 
   const target = dwellBtnAt(x, y);
   if (target !== gazeCurrentEl) {
@@ -540,61 +555,79 @@ function onGaze(data) {
   }
 }
 
-// Init WebGazer immediately (camera permission + model load happens now)
 webgazer.setGazeListener(onGaze);
+
 webgazer.begin().then(() => {
   webgazer.showVideoPreview(true);
   webgazer.showPredictionPoints(false);
   webgazer.showFaceOverlay(false);
   webgazer.showFaceFeedbackBox(false);
-  document.getElementById('cal-status').textContent = '✓ Câmera ativa — pode começar a calibrar';
+
+  document.getElementById('cal-status').textContent = '✓ Câmera ativa — clique nos pontos azuis';
+
+  // Move WebGazer's video into our styled calibration preview container
+  // so we can size it properly without clipping
+  const wgContainer = document.getElementById('webgazerVideoContainer');
+  const calVideoWrap = document.getElementById('cal-video-wrap');
+  if (wgContainer && calVideoWrap) {
+    calVideoWrap.appendChild(wgContainer);
+    // Override WebGazer's inline positioning now that it's inside our container
+    wgContainer.style.cssText = 'position:relative!important;top:auto!important;left:auto!important;width:100%!important;height:100%!important;opacity:1!important;border:none!important;border-radius:0!important;';
+  }
 }).catch(err => {
   console.warn('WebGazer error:', err);
-  document.getElementById('cal-status').textContent = '⚠ Câmera não disponível';
+  document.getElementById('cal-status').textContent = '⚠ Câmera não disponível — use o mouse para testar';
 });
 
-/* ═══════════════════════════════════════════════════
-   CALIBRATION DOTS
-   Each click → webgazer.recordScreenPosition(x, y)
-═══════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════
+   CALIBRATION — PHASE 1 (click) + PHASE 2 (look)
+═══════════════════════════════════════ */
 const CAL_POSITIONS = [
   [10,10],[50,10],[90,10],
   [10,50],[50,50],[90,50],
   [10,90],[50,90],[90,90],
 ];
 
+// Accuracy check positions (4 points between the calibration ones)
+const ACCURACY_POSITIONS = [
+  [30,30],[70,30],[30,70],[70,70],
+];
+
 let calDone = 0;
 const calScreen   = document.getElementById('calibration-screen');
 const calProgress = document.getElementById('calibration-progress');
+const calBar      = document.getElementById('cal-bar');
+const calStatus   = document.getElementById('cal-status');
+const calPhase    = document.getElementById('cal-phase');
+const calInstruct = document.getElementById('cal-instruction');
 const dots = [];
 
 CAL_POSITIONS.forEach(([xPct, yPct], i) => {
   const dot = document.createElement('div');
-  dot.className = 'cal-dot' + (i === 0 ? ' active' : '');
-  dot.style.left = `calc(${xPct}% - 24px)`;
-  dot.style.top  = `calc(${yPct}% - 24px)`;
+  dot.className = 'cal-dot phase-click' + (i === 0 ? ' active' : '');
+  dot.style.left = `calc(${xPct}% - 26px)`;
+  dot.style.top  = `calc(${yPct}% - 26px)`;
   dot.textContent = i + 1;
 
-  dot.addEventListener('click', (e) => {
+  dot.addEventListener('click', () => {
     if (dot.classList.contains('done')) return;
-
-    // Tell WebGazer: "when I clicked here, I was looking HERE"
     const rect = dot.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top  + rect.height / 2;
-    // Record multiple times to reinforce this calibration point
-    for (let r = 0; r < 5; r++) webgazer.recordScreenPosition(cx, cy, 'click');
+    // Record click multiple times — more weight = better calibration
+    for (let r = 0; r < 8; r++) webgazer.recordScreenPosition(cx, cy, 'click');
 
-    dot.classList.add('done');
-    dot.classList.remove('active');
+    dot.classList.add('done'); dot.classList.remove('active');
     calDone++;
     calProgress.textContent = `${calDone} / 9 pontos`;
+    calBar.style.width = (calDone / 9 * 100) + '%';
 
     if (calDone < CAL_POSITIONS.length) {
       dots[calDone].classList.add('active');
+      calStatus.textContent = `✓ Ponto ${calDone} registrado`;
     } else {
-      document.getElementById('cal-status').textContent = '✓ Calibração concluída!';
-      setTimeout(finishCalibration, 600);
+      calStatus.textContent = '✓ Calibração completa! Iniciando verificação de precisão…';
+      setTimeout(startAccuracyPhase, 800);
     }
   });
 
@@ -602,13 +635,77 @@ CAL_POSITIONS.forEach(([xPct, yPct], i) => {
   dots.push(dot);
 });
 
-function finishCalibration() {
-  calScreen.style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
-  // Keep gaze listener running — it was already set above
+/* Phase 2: auto-advance accuracy dots */
+let accIdx = 0;
+const accDots = [];
+
+function startAccuracyPhase() {
+  // Hide phase-1 dots
+  dots.forEach(d => d.style.display = 'none');
+
+  calInstruct.innerHTML = '<strong>Fase 2:</strong> Olhe para cada ponto laranja sem clicar.<br>Eles avançam automaticamente a cada 2 segundos.';
+  calPhase.textContent = 'FASE 2 — VERIFICAÇÃO DE PRECISÃO';
+  calProgress.textContent = '0 / 4 pontos';
+  calBar.style.width = '0%';
+
+  ACCURACY_POSITIONS.forEach(([xPct, yPct], i) => {
+    const dot = document.createElement('div');
+    dot.className = 'cal-dot phase-look';
+    dot.style.left = `calc(${xPct}% - 26px)`;
+    dot.style.top  = `calc(${yPct}% - 26px)`;
+    dot.textContent = i + 1;
+    calScreen.appendChild(dot);
+    accDots.push(dot);
+  });
+
+  showAccuracyDot(0);
 }
 
-document.getElementById('skip-cal').addEventListener('click', finishCalibration);
+function showAccuracyDot(idx) {
+  if (idx >= accDots.length) {
+    calStatus.textContent = '✓ Tudo pronto!';
+    setTimeout(finishCalibration, 600);
+    return;
+  }
+  accDots[idx].classList.add('active');
+  calProgress.textContent = `${idx + 1} / 4 pontos`;
+  calBar.style.width = ((idx + 1) / 4 * 100) + '%';
+  calStatus.textContent = `Olhe para o ponto ${idx + 1}…`;
+
+  setTimeout(() => {
+    // record gaze position at this dot as a "move" event (extra training data)
+    const rect = accDots[idx].getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top  + rect.height / 2;
+    for (let r = 0; r < 5; r++) webgazer.recordScreenPosition(cx, cy, 'click');
+
+    accDots[idx].classList.remove('active');
+    accDots[idx].classList.add('done');
+    showAccuracyDot(idx + 1);
+  }, 2000);
+}
+
+function finishCalibration() {
+  gazeListenerActive = true;
+  calScreen.style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+
+  // Move WebGazer video back to its normal fixed position in the main app
+  const wgContainer = document.getElementById('webgazerVideoContainer');
+  if (wgContainer) {
+    document.body.appendChild(wgContainer);
+    // Restore our main-app styles (CSS class will handle it, just clear inline)
+    wgContainer.removeAttribute('style');
+  }
+}
+
+document.getElementById('skip-cal').addEventListener('click', () => {
+  gazeListenerActive = true;
+  calScreen.style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  const wgContainer = document.getElementById('webgazerVideoContainer');
+  if (wgContainer) { document.body.appendChild(wgContainer); wgContainer.removeAttribute('style'); }
+});
 </script>
 </body>
 </html>
