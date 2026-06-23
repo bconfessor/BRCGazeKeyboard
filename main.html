@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AAC – Comunicação por Olhar</title>
+<style>
+  /* ── Reset & base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0e1a;
+    --surface:   #111827;
+    --border:    #1e2d45;
+    --text:      #f0f4ff;
+    --muted:     #7a8aaa;
+
+    /* Button palette */
+    --c-yes:     #166534;  --c-yes-fill:  #22c55e;
+    --c-no:      #7f1d1d;  --c-no-fill:   #ef4444;
+    --c-lower:   #1e3a5f;  --c-lower-fill:#3b82f6;
+    --c-higher:  #1e3a5f;  --c-higher-fill:#60a5fa;
+    --c-pain:    #4c1d95;  --c-pain-fill: #a855f7;
+    --c-hungry:  #78350f;  --c-hungry-fill:#f59e0b;
+    --c-thirsty: #164e63;  --c-thirsty-fill:#06b6d4;
+    --c-help:    #7f1d1d;  --c-help-fill:  #f97316;
+
+    --c-kb:      #1e3a5f;  --c-kb-fill:   #3b82f6;
+    --c-prompts: #166534;  --c-prompts-fill:#22c55e;
+    --c-speak:   #4c1d95;  --c-speak-fill: #a855f7;
+
+    --dwell: 1000; /* ms, updated by JS */
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ══════════════════════════════════════════
+     CALIBRATION SCREEN
+  ══════════════════════════════════════════ */
+  #calibration-screen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 32px;
+  }
+
+  #calibration-screen h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  #calibration-screen p {
+    color: var(--muted);
+    font-size: 1rem;
+    text-align: center;
+    max-width: 520px;
+    line-height: 1.6;
+    margin-bottom: 6px;
+  }
+
+  #calibration-screen .hint {
+    font-size: 0.85rem;
+    color: #4a6080;
+    margin-bottom: 20px;
+  }
+
+  #calibration-progress {
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .cal-dot {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: #1e3a5f;
+    border: 3px solid #3b82f6;
+    position: absolute;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.15s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cal-dot:hover { transform: scale(1.15); background: #3b82f6; }
+  .cal-dot.done  { background: #166534; border-color: #22c55e; }
+  .cal-dot.active { animation: pulse-dot 0.7s infinite alternate; }
+
+  @keyframes pulse-dot {
+    from { box-shadow: 0 0 0 0 rgba(59,130,246,0.6); }
+    to   { box-shadow: 0 0 0 14px rgba(59,130,246,0); }
+  }
+
+  #skip-cal {
+    position: absolute;
+    bottom: 28px;
+    right: 32px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 8px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  #skip-cal:hover { border-color: var(--muted); color: var(--text); }
+
+  /* ══════════════════════════════════════════
+     MAIN APP
+  ══════════════════════════════════════════ */
+  #app {
+    display: none;
+    flex-direction: column;
+    height: 100vh;
+    padding: 12px;
+    gap: 10px;
+  }
+
+  /* Top bar */
+  #topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    height: 64px;
+  }
+
+  /* Context buttons (Prompts / Keyboard) */
+  .ctx-btn {
+    position: relative;
+    overflow: hidden;
+    padding: 10px 24px;
+    border-radius: 12px;
+    border: 2px solid;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    min-width: 130px;
+    text-align: center;
+    user-select: none;
+    transition: opacity 0.2s;
+  }
+  .ctx-btn.disabled {
+    opacity: 0.25;
+    pointer-events: none;
+  }
+
+  #btn-prompts {
+    background: var(--c-prompts);
+    border-color: var(--c-prompts-fill);
+    color: #fff;
+  }
+  #btn-keyboard {
+    background: var(--c-kb);
+    border-color: var(--c-kb-fill);
+    color: #fff;
+  }
+
+  /* ── Main content area ── */
+  #content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+  }
+
+  /* ══════════════════════════════════════════
+     PROMPTS GRID
+  ══════════════════════════════════════════ */
+  #prompts-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 14px;
+    width: 100%;
+    max-width: 1100px;
+    height: 100%;
+    max-height: 480px;
+  }
+
+  /* ══════════════════════════════════════════
+     KEYBOARD VIEW
+  ══════════════════════════════════════════ */
+  #keyboard-view {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    max-width: 1100px;
+  }
+
+  #typed-text {
+    width: 100%;
+    min-height: 72px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 22px;
+    font-size: 1.8rem;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.03em;
+    word-break: break-word;
+    display: flex;
+    align-items: center;
+  }
+
+  #typed-text span.cursor {
+    display: inline-block;
+    width: 3px;
+    height: 1.8rem;
+    background: var(--text);
+    margin-left: 4px;
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+  }
+
+  #kb-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .kb-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  /* ══════════════════════════════════════════
+     SHARED DWELL BUTTON
+  ══════════════════════════════════════════ */
+  .dwell-btn {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    border: 3px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition: transform 0.1s;
+  }
+
+  .dwell-btn:active { transform: scale(0.97); }
+
+  /* Fill layer — sweeps left→right */
+  .dwell-btn .fill {
+    position: absolute;
+    inset: 0;
+    width: 0%;
+    transition: none;
+    z-index: 0;
+    border-radius: 13px;
+  }
+
+  .dwell-btn .label {
+    position: relative;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  /* Triggered flash */
+  .dwell-btn.triggered {
+    animation: flash-btn 0.35s ease;
+  }
+  @keyframes flash-btn {
+    0%   { filter: brightness(1); }
+    40%  { filter: brightness(2.2); }
+    100% { filter: brightness(1); }
+  }
+
+  /* ── Prompt buttons (large) ── */
+  .prompt-btn {
+    font-size: clamp(1.4rem, 2.8vw, 2.2rem);
+  }
+
+  /* ── Keyboard key buttons (smaller) ── */
+  .key-btn {
+    width: 72px;
+    height: 64px;
+    font-size: 1.1rem;
+    border-radius: 12px;
+    flex-shrink: 0;
+  }
+  .key-btn.wide { width: 120px; }
+  .key-btn.wider { width: 160px; }
+
+  /* ── Speak button ── */
+  #btn-speak {
+    align-self: flex-end;
+    width: 180px;
+    height: 56px;
+    font-size: 1rem;
+    background: var(--c-speak);
+    border-color: var(--c-speak-fill);
+    color: #fff;
+  }
+  #btn-speak .fill { background: var(--c-speak-fill); }
+
+  /* ══════════════════════════════════════════
+     BOTTOM BAR (dwell speed control)
+  ══════════════════════════════════════════ */
+  #bottombar {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    height: 48px;
+    padding-right: 4px;
+  }
+
+  #dwell-label {
+    color: var(--muted);
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  #dwell-display {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 14px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+    min-width: 80px;
+    text-align: center;
+  }
+
+  .speed-btn {
+    width: 38px; height: 38px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .speed-btn:hover { background: var(--border); border-color: var(--muted); }
+
+  /* ── WebGazer video overlay (keep it small + out of the way) ── */
+  #webgazerVideoContainer {
+    position: fixed !important;
+    bottom: 60px !important;
+    left: 8px !important;
+    width: 160px !important;
+    height: 120px !important;
+    opacity: 0.55;
+    border-radius: 8px;
+    overflow: hidden;
+    z-index: 500;
+  }
+  #webgazerFaceOverlay,
+  #webgazerFaceFeedbackBox { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     CALIBRATION SCREEN
+═══════════════════════════════════════════════ -->
+<div id="calibration-screen">
+  <h1>Calibração do Olhar</h1>
+  <p>Clique em cada ponto azul enquanto olha diretamente para ele.<br>
+     Quanto mais pontos você clicar, mais preciso será o rastreamento.</p>
+  <p class="hint">Mantenha a cabeça relativamente estável durante a calibração.</p>
+  <div id="calibration-progress">0 / 9 pontos</div>
+  <!-- dots injected by JS -->
+  <button id="skip-cal">Pular calibração</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     MAIN APP
+═══════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- Top bar -->
+  <div id="topbar">
+    <div id="btn-prompts" class="ctx-btn dwell-btn disabled"
+         data-speak="Prompts">
+      <div class="fill" style="background:var(--c-prompts-fill)"></div>
+      <span class="label">📋 Prompts</span>
+    </div>
+
+    <div id="btn-keyboard" class="ctx-btn dwell-btn"
+         data-speak="Teclado">
+      <div class="fill" style="background:var(--c-kb-fill)"></div>
+      <span class="label">⌨️ Teclado</span>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div id="content">
+
+    <!-- Prompts grid -->
+    <div id="prompts-grid">
+      <!-- buttons injected by JS -->
+    </div>
+
+    <!-- Keyboard view -->
+    <div id="keyboard-view">
+      <div id="typed-text"><span id="typed-span"></span><span class="cursor"></span></div>
+      <div id="kb-rows"><!-- injected by JS --></div>
+      <div id="btn-speak" class="dwell-btn ctx-btn">
+        <div class="fill"></div>
+        <span class="label">🔊 Falar</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom bar -->
+  <div id="bottombar">
+    <span id="dwell-label">Tempo de fixação</span>
+    <div id="dwell-display">1000 ms</div>
+    <button class="speed-btn" id="speed-down" title="Diminuir">▼</button>
+    <button class="speed-btn" id="speed-up"   title="Aumentar">▲</button>
+  </div>
+</div>
+
+<!-- WebGazer -->
+<script src="https://cdn.jsdelivr.net/npm/webgazer@2.1.0/dist/webgazer.min.js"></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   CONFIG
+═══════════════════════════════════════════════════════════════ */
+let dwellTime = 1000; // ms
+
+const PROMPTS = [
+  { label: 'Sim',    speak: 'Sim',    bg: 'var(--c-yes)',     fill: 'var(--c-yes-fill)' },
+  { label: 'Não',    speak: 'Não',    bg: 'var(--c-no)',      fill: 'var(--c-no-fill)'  },
+  { label: 'Menos',  speak: 'Menos',  bg: 'var(--c-lower)',   fill: 'var(--c-lower-fill)' },
+  { label: 'Mais',   speak: 'Mais',   bg: 'var(--c-higher)',  fill: 'var(--c-higher-fill)' },
+  { label: 'Dor',    speak: 'Dor',    bg: 'var(--c-pain)',    fill: 'var(--c-pain-fill)'  },
+  { label: 'Fome',   speak: 'Fome',   bg: 'var(--c-hungry)',  fill: 'var(--c-hungry-fill)' },
+  { label: 'Sede',   speak: 'Sede',   bg: 'var(--c-thirsty)', fill: 'var(--c-thirsty-fill)' },
+  { label: 'Ajuda',  speak: 'Ajuda',  bg: 'var(--c-help)',    fill: 'var(--c-help-fill)'  },
+];
+
+const KB_ROWS = [
+  ['Q','W','E','R','T','Y','U','I','O','P'],
+  ['A','S','D','F','G','H','J','K','L'],
+  ['Z','X','C','V','B','N','M','⌫'],
+  ['ESPAÇO'],
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   SPEECH
+═══════════════════════════════════════════════════════════════ */
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'pt-BR';
+  // prefer a pt-BR voice if available
+  const voices = speechSynthesis.getVoices();
+  const ptVoice = voices.find(v => v.lang.startsWith('pt'));
+  if (ptVoice) u.voice = ptVoice;
+  u.rate = 0.95;
+  speechSynthesis.speak(u);
+}
+// voices load async in some browsers
+window.speechSynthesis.onvoiceschanged = () => {};
+
+/* ═══════════════════════════════════════════════════════════════
+   DWELL ENGINE
+   Each .dwell-btn gets:
+     _hovered  : bool  (mouse/gaze is over it)
+     _clicked  : bool  (dwell completed — must hover-off before re-triggering)
+     _timer    : rAF id
+     _start    : timestamp
+═══════════════════════════════════════════════════════════════ */
+function makeDwellBtn(el, onTrigger) {
+  const fillEl = el.querySelector('.fill');
+
+  function startDwell() {
+    if (el._clicked || el._dwelling) return;
+    el._dwelling = true;
+    el._start = performance.now();
+
+    function tick(now) {
+      if (!el._dwelling) return;
+      const elapsed = now - el._start;
+      const pct = Math.min(elapsed / dwellTime * 100, 100);
+      fillEl.style.width = pct + '%';
+      fillEl.style.transition = 'none';
+
+      if (elapsed >= dwellTime) {
+        el._clicked = true;
+        el._dwelling = false;
+        fillEl.style.width = '100%';
+        el.classList.add('triggered');
+        setTimeout(() => el.classList.remove('triggered'), 400);
+        onTrigger(el);
+      } else {
+        el._timer = requestAnimationFrame(tick);
+      }
+    }
+    el._timer = requestAnimationFrame(tick);
+  }
+
+  function stopDwell() {
+    el._dwelling = false;
+    cancelAnimationFrame(el._timer);
+    // animate fill back to 0 only if not clicked
+    if (!el._clicked) {
+      fillEl.style.transition = 'width 0.2s ease';
+      fillEl.style.width = '0%';
+    }
+  }
+
+  function onEnter() {
+    el._hovered = true;
+    if (!el._clicked) startDwell();
+  }
+
+  function onLeave() {
+    el._hovered = false;
+    el._clicked = false; // reset: can be triggered again after re-hover
+    stopDwell();
+    fillEl.style.transition = 'width 0.2s ease';
+    fillEl.style.width = '0%';
+  }
+
+  el.addEventListener('mouseenter', onEnter);
+  el.addEventListener('mouseleave', onLeave);
+
+  // expose for gaze
+  el._gazeEnter = onEnter;
+  el._gazeLeave = onLeave;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BUILD PROMPTS GRID
+═══════════════════════════════════════════════════════════════ */
+const promptsGrid = document.getElementById('prompts-grid');
+
+PROMPTS.forEach(p => {
+  const btn = document.createElement('div');
+  btn.className = 'dwell-btn prompt-btn';
+  btn.style.background = p.bg;
+  btn.style.borderColor = p.fill;
+  btn.style.color = '#fff';
+  btn.innerHTML = `<div class="fill" style="background:${p.fill}"></div><span class="label">${p.label}</span>`;
+  btn.dataset.speak = p.speak;
+  promptsGrid.appendChild(btn);
+
+  makeDwellBtn(btn, () => speak(p.speak));
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   BUILD KEYBOARD
+═══════════════════════════════════════════════════════════════ */
+const kbRows = document.getElementById('kb-rows');
+let typedText = '';
+
+function updateTyped() {
+  document.getElementById('typed-span').textContent = typedText;
+}
+
+KB_ROWS.forEach(row => {
+  const rowEl = document.createElement('div');
+  rowEl.className = 'kb-row';
+  row.forEach(key => {
+    const btn = document.createElement('div');
+    btn.className = 'dwell-btn key-btn';
+    if (key === 'ESPAÇO') btn.classList.add('wider');
+    else if (key === '⌫') btn.classList.add('wide');
+
+    // keyboard keys: dark bg with cyan fill
+    btn.style.background = '#1a2535';
+    btn.style.borderColor = '#4dd0e1';
+    btn.style.color = '#fff';
+
+    btn.innerHTML = `<div class="fill" style="background:#4dd0e1;opacity:0.55"></div><span class="label">${key}</span>`;
+
+    makeDwellBtn(btn, () => {
+      if (key === '⌫') {
+        typedText = typedText.slice(0, -1);
+      } else if (key === 'ESPAÇO') {
+        typedText += ' ';
+      } else {
+        typedText += key;
+      }
+      updateTyped();
+    });
+
+    rowEl.appendChild(btn);
+  });
+  kbRows.appendChild(rowEl);
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   SPEAK BUTTON
+═══════════════════════════════════════════════════════════════ */
+const btnSpeak = document.getElementById('btn-speak');
+makeDwellBtn(btnSpeak, () => {
+  if (typedText.trim()) speak(typedText.trim());
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   CONTEXT SWITCHING (Prompts / Keyboard)
+═══════════════════════════════════════════════════════════════ */
+const btnPrompts  = document.getElementById('btn-prompts');
+const btnKeyboard = document.getElementById('btn-keyboard');
+const promptsView = document.getElementById('prompts-grid');
+const keyboardView= document.getElementById('keyboard-view');
+
+function showPrompts() {
+  promptsView.style.display = 'grid';
+  keyboardView.style.display = 'none';
+  btnPrompts.classList.add('disabled');
+  btnKeyboard.classList.remove('disabled');
+}
+
+function showKeyboard() {
+  promptsView.style.display = 'none';
+  keyboardView.style.display = 'flex';
+  btnKeyboard.classList.add('disabled');
+  btnPrompts.classList.remove('disabled');
+}
+
+makeDwellBtn(btnPrompts,  showPrompts);
+makeDwellBtn(btnKeyboard, showKeyboard);
+
+// initial state: prompts visible
+showPrompts();
+
+/* ═══════════════════════════════════════════════════════════════
+   DWELL SPEED CONTROL
+═══════════════════════════════════════════════════════════════ */
+const dwellDisplay = document.getElementById('dwell-display');
+const STEP = 100;
+
+function updateDwellDisplay() {
+  dwellDisplay.textContent = dwellTime + ' ms';
+}
+
+document.getElementById('speed-up').addEventListener('click', () => {
+  dwellTime = Math.min(dwellTime + STEP, 5000);
+  updateDwellDisplay();
+});
+document.getElementById('speed-down').addEventListener('click', () => {
+  dwellTime = Math.max(dwellTime - STEP, 100);
+  updateDwellDisplay();
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   CALIBRATION
+═══════════════════════════════════════════════════════════════ */
+const CAL_POSITIONS = [
+  [10,10],[50,10],[90,10],
+  [10,50],[50,50],[90,50],
+  [10,90],[50,90],[90,90],
+];
+
+let calDone = 0;
+const calScreen = document.getElementById('calibration-screen');
+const calProgress = document.getElementById('calibration-progress');
+const dots = [];
+
+CAL_POSITIONS.forEach(([x, y], i) => {
+  const dot = document.createElement('div');
+  dot.className = 'cal-dot' + (i === 0 ? ' active' : '');
+  dot.style.left = `calc(${x}% - 22px)`;
+  dot.style.top  = `calc(${y}% - 22px)`;
+  dot.innerHTML = `<span style="color:#7aa8f0;font-size:0.7rem;font-weight:700">${i+1}</span>`;
+  dot.addEventListener('click', () => {
+    if (dot.classList.contains('done')) return;
+    dot.classList.add('done');
+    dot.classList.remove('active');
+    calDone++;
+    calProgress.textContent = `${calDone} / 9 pontos`;
+    if (calDone < CAL_POSITIONS.length) {
+      dots[calDone].classList.add('active');
+    } else {
+      setTimeout(finishCalibration, 400);
+    }
+  });
+  calScreen.appendChild(dot);
+  dots.push(dot);
+});
+
+function finishCalibration() {
+  calScreen.style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  startWebGazer();
+}
+
+document.getElementById('skip-cal').addEventListener('click', finishCalibration);
+
+/* ═══════════════════════════════════════════════════════════════
+   WEBGAZER + GAZE → DWELL
+═══════════════════════════════════════════════════════════════ */
+let gazeCurrentEl = null;
+
+function getAllDwellBtns() {
+  return Array.from(document.querySelectorAll('.dwell-btn:not(.disabled)'));
+}
+
+function elFromGaze(x, y) {
+  const el = document.elementFromPoint(x, y);
+  if (!el) return null;
+  return el.closest('.dwell-btn');
+}
+
+function startWebGazer() {
+  try {
+    webgazer
+      .setGazeListener((data) => {
+        if (!data) return;
+        const { x, y } = data;
+        const target = elFromGaze(x, y);
+
+        if (target !== gazeCurrentEl) {
+          // leave old
+          if (gazeCurrentEl && gazeCurrentEl._gazeLeave) {
+            gazeCurrentEl._gazeLeave();
+          }
+          gazeCurrentEl = target;
+          // enter new
+          if (gazeCurrentEl && gazeCurrentEl._gazeEnter) {
+            gazeCurrentEl._gazeEnter();
+          }
+        }
+      })
+      .begin();
+
+    webgazer.showVideoPreview(true);
+    webgazer.showPredictionPoints(false);
+    webgazer.showFaceOverlay(false);
+    webgazer.showFaceFeedbackBox(false);
+  } catch(e) {
+    console.warn('WebGazer não disponível:', e);
+  }
+}
+</script>
+</body>
+</html>
