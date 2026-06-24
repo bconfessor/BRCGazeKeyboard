@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AAC – Comunicação por Olhar</title>
+<title>AAC – Seleção de Mecanismo</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -14,621 +14,163 @@
     --text:      #f0f4ff;
     --muted:     #7a8aaa;
 
-    --c-yes:     #166534;  --c-yes-fill:  #22c55e;
-    --c-no:      #7f1d1d;  --c-no-fill:   #ef4444;
-    --c-lower:   #1e3a5f;  --c-lower-fill:#3b82f6;
-    --c-higher:  #1e3a5f;  --c-higher-fill:#60a5fa;
-    --c-pain:    #4c1d95;  --c-pain-fill: #a855f7;
-    --c-hungry:  #78350f;  --c-hungry-fill:#f59e0b;
-    --c-thirsty: #164e63;  --c-thirsty-fill:#06b6d4;
-    --c-help:    #7f1d1d;  --c-help-fill:  #f97316;
-    --c-kb:      #1e3a5f;  --c-kb-fill:   #3b82f6;
-    --c-prompts: #166534;  --c-prompts-fill:#22c55e;
-    --c-speak:   #4c1d95;  --c-speak-fill: #a855f7;
+    /* Theme colors matching WebGazer (Blue) and GazeCloud (Purple) */
+    --c-wg:      #1e3a5f;  --c-wg-glow:   #3b82f6;
+    --c-gc:      #4c1d95;  --c-gc-glow:   #a855f7;
   }
 
   body {
     background: var(--bg);
     color: var(--text);
     font-family: 'Segoe UI', system-ui, sans-serif;
-    height: 100vh; overflow: hidden;
-    display: flex; flex-direction: column;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 20px;
   }
 
-  /* ══════════════════════════════════════════
-     STARTUP OVERLAY
-     Shown while GazeCloud calibration runs.
-     GazeCloud renders its own UI on top of the page,
-     so we just need a dark backdrop with instructions.
-  ══════════════════════════════════════════ */
-  #startup-overlay {
-    position: fixed; inset: 0;
-    background: rgba(10, 14, 26, 0.92);
-    z-index: 2000;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    gap: 18px; text-align: center; padding: 32px;
+  .container {
+    text-align: center;
+    max-width: 800px;
+    width: 100%;
   }
 
-  #startup-overlay h1 { font-size: 1.8rem; font-weight: 700; }
-  #startup-overlay p  { color: var(--muted); font-size: 1rem; max-width: 480px; line-height: 1.7; }
-
-  #startup-status {
-    font-size: 1rem; font-weight: 600;
-    color: #60a5fa; min-height: 1.4em;
+  header {
+    margin-bottom: 48px;
   }
 
-  /* Registration warning box */
-  #reg-warning {
-    background: #1e1a05; border: 1px solid #92400e;
-    border-radius: 12px; padding: 14px 20px;
-    max-width: 500px; font-size: 0.85rem;
-    color: #fcd34d; line-height: 1.6; display: none;
-  }
-  #reg-warning a { color: #fb923c; }
-
-  #btn-start-gaze {
-    padding: 14px 36px; border-radius: 12px;
-    background: #1e3a5f; border: 2px solid #3b82f6;
-    color: #fff; font-size: 1.1rem; font-weight: 700;
-    cursor: pointer; letter-spacing: 0.04em;
-    transition: background 0.15s;
-  }
-  #btn-start-gaze:hover { background: #2a4a7f; }
-  #btn-start-gaze:disabled { opacity: 0.4; cursor: default; }
-
-  #btn-skip-cal {
-    background: transparent; border: 1px solid var(--border);
-    color: var(--muted); padding: 8px 20px;
-    border-radius: 8px; cursor: pointer; font-size: 0.85rem;
-  }
-  #btn-skip-cal:hover { border-color: var(--muted); color: var(--text); }
-
-  /* face-lost banner shown during main app */
-  #face-lost-banner {
-    position: fixed; top: 0; left: 0; right: 0;
-    background: #7f1d1d; color: #fca5a5;
-    text-align: center; padding: 8px;
-    font-size: 0.9rem; font-weight: 600;
-    z-index: 800; display: none;
+  header h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+    background: linear-gradient(to right, #60a5fa, #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
 
-  /* ══════════════════════════════════════════
-     MAIN APP
-  ══════════════════════════════════════════ */
-  #app {
-    display: none; flex-direction: column;
-    height: 100vh; padding: 12px; gap: 10px;
+  header p {
+    color: var(--muted);
+    font-size: 1.1rem;
+    line-height: 1.6;
   }
 
-  #topbar {
-    display: flex; justify-content: space-between;
-    align-items: center; flex-shrink: 0; height: 64px;
-  }
-
-  .ctx-btn {
-    position: relative; overflow: hidden;
-    padding: 10px 24px; border-radius: 12px; border: 2px solid;
-    font-size: 1rem; font-weight: 700; letter-spacing: 0.04em;
-    cursor: pointer; min-width: 130px; text-align: center;
-    user-select: none; transition: opacity 0.2s;
-  }
-  .ctx-btn.disabled { opacity: 0.25; pointer-events: none; }
-  #btn-prompts  { background: var(--c-prompts);  border-color: var(--c-prompts-fill); color: #fff; }
-  #btn-keyboard { background: var(--c-kb);        border-color: var(--c-kb-fill);      color: #fff; }
-
-  #content {
-    flex: 1; display: flex;
-    align-items: center; justify-content: center; min-height: 0;
-  }
-
-  /* Prompts */
-  #prompts-grid {
+  .grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    grid-template-rows: repeat(2, 1fr);
-    gap: 14px; width: 100%; max-width: 1100px;
-    height: 100%; max-height: 480px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+    width: 100%;
   }
 
-  /* Keyboard */
-  #keyboard-view {
-    display: none; flex-direction: column;
-    align-items: center; gap: 10px;
-    width: 100%; max-width: 1100px;
+  /* Big selection buttons matching your system layout layout rules */
+  .selection-card {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 20px;
+    padding: 40px 30px;
+    text-decoration: none;
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), 
+                border-color 0.2s ease, 
+                box-shadow 0.2s ease;
   }
-  #typed-text {
-    width: 100%; min-height: 72px;
-    background: var(--surface); border: 2px solid var(--border);
-    border-radius: 14px; padding: 16px 22px;
-    font-size: 1.8rem; font-weight: 600; color: var(--text);
-    letter-spacing: 0.03em; word-break: break-word;
-    display: flex; align-items: center;
-  }
-  #typed-text span.cursor {
-    display: inline-block; width: 3px; height: 1.8rem;
-    background: var(--text); margin-left: 4px;
-    animation: blink 1s step-end infinite;
-  }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-  #kb-rows { display: flex; flex-direction: column; gap: 8px; width: 100%; }
-  .kb-row  { display: flex; justify-content: center; gap: 8px; }
 
-  /* ══════════════════════════════════════════
-     DWELL BUTTON
-  ══════════════════════════════════════════ */
-  .dwell-btn {
-    position: relative; overflow: hidden;
-    border-radius: 16px; border: 3px solid transparent;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer; user-select: none;
-    font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
-    transition: transform 0.1s;
+  .selection-card:active {
+    transform: scale(0.97);
   }
-  .dwell-btn:active { transform: scale(0.97); }
-  .dwell-btn .fill {
-    position: absolute; inset: 0; width: 0%;
-    transition: none; z-index: 0; border-radius: 13px;
-  }
-  .dwell-btn .label { position: relative; z-index: 1; pointer-events: none; }
-  .dwell-btn.triggered { animation: flash-btn 0.35s ease; }
-  @keyframes flash-btn { 0%{filter:brightness(1)} 40%{filter:brightness(2.2)} 100%{filter:brightness(1)} }
 
-  .prompt-btn { font-size: clamp(1.4rem, 2.8vw, 2.2rem); }
-
-  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-     KEY BUTTON SIZE — adjust here
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-  .key-btn        { width: 114px;  height: 104px; font-size: 1.25rem; border-radius: 15px; flex-shrink: 0; }
-  .key-btn.wide   { width: 280px; }
-  .key-btn.wider  { width: 700px; }
-
-  #btn-speak {
-    align-self: flex-end; width: 180px; height: 56px; font-size: 1rem;
-    background: var(--c-speak); border-color: var(--c-speak-fill); color: #fff;
+  /* WebGazer specific variations */
+  .selection-card.webgazer:hover {
+    border-color: var(--c-wg-glow);
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.15);
+    transform: translateY(-4px);
   }
-  #btn-speak .fill { background: var(--c-speak-fill); }
+  .selection-card.webgazer .icon-badge {
+    background: var(--c-wg);
+    border-color: var(--c-wg-glow);
+  }
 
-  /* Bottom bar */
-  #bottombar {
-    flex-shrink: 0; display: flex;
-    justify-content: flex-end; align-items: center;
-    gap: 10px; height: 48px; padding-right: 4px;
+  /* GazeCloud specific variations */
+  .selection-card.gazecloud:hover {
+    border-color: var(--c-gc-glow);
+    box-shadow: 0 0 30px rgba(168, 85, 247, 0.15);
+    transform: translateY(-4px);
   }
-  #dwell-label { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.06em; text-transform: uppercase; }
-  #dwell-display {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; padding: 4px 14px;
-    font-size: 1rem; font-weight: 700; color: var(--text);
-    min-width: 80px; text-align: center;
+  .selection-card.gazecloud .icon-badge {
+    background: var(--c-gc);
+    border-color: var(--c-gc-glow);
   }
-  .speed-btn {
-    width: 38px; height: 38px; border-radius: 8px;
-    background: var(--surface); border: 1px solid var(--border);
-    color: var(--text); font-size: 1.1rem; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: background 0.15s, border-color 0.15s;
-  }
-  .speed-btn:hover { background: var(--border); border-color: var(--muted); }
 
-  /* Gaze dot */
-  #gaze-dot {
-    position: fixed; width: 22px; height: 22px; border-radius: 50%;
-    background: rgba(96,165,250,0.75); border: 2px solid #fff;
-    pointer-events: none; transform: translate(-50%,-50%);
-    z-index: 900; display: none;
-    box-shadow: 0 0 8px rgba(96,165,250,0.5);
+  .icon-badge {
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+    border: 2px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    margin-bottom: 20px;
+  }
+
+  .card-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+    letter-spacing: 0.02em;
+  }
+
+  .card-desc {
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    .grid {
+      grid-template-columns: 1fr;
+    }
+    header h1 {
+      font-size: 2rem;
+    }
   }
 </style>
 </head>
 <body>
 
-<div id="gaze-dot"></div>
-<div id="face-lost-banner">⚠ Rosto não detectado — reposicione-se em frente à câmera</div>
+<div class="container">
+  <header>
+    <h1>Painel de Comunicação AAC</h1>
+    <p>Selecione o motor de rastreamento ocular ideal para a sua sessão atual.</p>
+  </header>
 
-<!-- ═══════════════════════════════════════════════
-     STARTUP OVERLAY (shown while GazeCloud calibrates)
-═══════════════════════════════════════════════ -->
-<div id="startup-overlay">
-  <h1>AAC – Comunicação por Olhar</h1>
-  <p>
-    Clique em <strong>Iniciar calibração</strong> e siga o ponto vermelho com os olhos.<br>
-    A calibração leva cerca de 30 segundos e garante melhor precisão.
-  </p>
-
-  <div id="reg-warning">
-    ⚠ <strong>Domínio não registado:</strong> O GazeCloudAPI requer que o domínio
-    <code>bconfessor.github.io</code> esteja registado em
-    <a href="https://api.gazerecorder.com/register/" target="_blank">api.gazerecorder.com/register</a>
-    para funcionar. Se o rastreamento não iniciar, registe o domínio primeiro.
-  </div>
-
-  <div id="startup-status">Aguardando…</div>
-
-  <button id="btn-start-gaze">👁 Iniciar calibração</button>
-  <button id="btn-skip-cal">Pular calibração (só mouse)</button>
-</div>
-
-<!-- ═══════════════════════════════════════════════
-     MAIN APP
-═══════════════════════════════════════════════ -->
-<div id="app">
-  <div id="topbar">
-    <div id="btn-prompts" class="ctx-btn dwell-btn disabled">
-      <div class="fill" style="background:var(--c-prompts-fill)"></div>
-      <span class="label">📋 Prompts</span>
-    </div>
-    <div id="btn-keyboard" class="ctx-btn dwell-btn">
-      <div class="fill" style="background:var(--c-kb-fill)"></div>
-      <span class="label">⌨️ Teclado</span>
-    </div>
-  </div>
-
-  <div id="content">
-    <div id="prompts-grid"></div>
-    <div id="keyboard-view">
-      <div id="typed-text"><span id="typed-span"></span><span class="cursor"></span></div>
-      <div id="kb-rows"></div>
-      <div id="btn-speak" class="dwell-btn ctx-btn">
-        <div class="fill"></div>
-        <span class="label">🔊 Falar</span>
+  <div class="grid">
+    <a href="index-webgazer.html" class="selection-card webgazer">
+      <div class="icon-badge">👁️</div>
+      <div class="card-title">Versão WebGazer</div>
+      <div class="card-desc">
+        Processamento local ilimitado. Mantém as calibrações salvas entre recarregamentos e possui estabilização aprimorada por filtro.
       </div>
-    </div>
-  </div>
+    </a>
 
-  <div id="bottombar">
-    <span id="dwell-label">Tempo de fixação</span>
-    <div id="dwell-display">1000 ms</div>
-    <button class="speed-btn" id="speed-down">▼</button>
-    <button class="speed-btn" id="speed-up">▲</button>
+    <a href="index-gazecloud.html" class="selection-card gazecloud">
+      <div class="icon-badge">☁️</div>
+      <div class="card-title">Versão GazeCloud</div>
+      <div class="card-desc">
+        Processamento de alta precisão via servidor na nuvem. Ideal para testes rápidos (limite de 3 minutos por sessão).
+      </div>
+    </a>
   </div>
 </div>
 
-<!-- GazeCloud API -->
-<script src="https://api.gazerecorder.com/GazeCloudAPI.js"></script>
-
-<script>
-/* ═══════════════════════════════════════
-   CONFIG
-═══════════════════════════════════════ */
-let dwellTime = 1000;
-
-const PROMPTS = [
-  { label:'Sim',   speak:'Sim',   bg:'var(--c-yes)',     fill:'var(--c-yes-fill)'     },
-  { label:'Não',   speak:'Não',   bg:'var(--c-no)',      fill:'var(--c-no-fill)'      },
-  { label:'Menos', speak:'Menos', bg:'var(--c-lower)',   fill:'var(--c-lower-fill)'   },
-  { label:'Mais',  speak:'Mais',  bg:'var(--c-higher)',  fill:'var(--c-higher-fill)'  },
-  { label:'Dor',   speak:'Dor',   bg:'var(--c-pain)',    fill:'var(--c-pain-fill)'    },
-  { label:'Fome',  speak:'Fome',  bg:'var(--c-hungry)',  fill:'var(--c-hungry-fill)'  },
-  { label:'Sede',  speak:'Sede',  bg:'var(--c-thirsty)', fill:'var(--c-thirsty-fill)' },
-  { label:'Ajuda', speak:'Ajuda', bg:'var(--c-help)',    fill:'var(--c-help-fill)'    },
-];
-
-const KB_ROWS = [
-  ['Q','W','E','R','T','Y','U','I','O','P'],
-  ['A','S','D','F','G','H','J','K','L'],
-  ['Z','X','C','V','B','N','M','⌫'],
-  ['ESPAÇO'],
-];
-
-/* ═══════════════════════════════════════
-   SPEECH (pt-BR)
-═══════════════════════════════════════ */
-function speak(text) {
-  if (!window.speechSynthesis) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'pt-BR';
-  const ptVoice = speechSynthesis.getVoices().find(v => v.lang.startsWith('pt'));
-  if (ptVoice) u.voice = ptVoice;
-  u.rate = 0.95;
-  speechSynthesis.speak(u);
-}
-if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => {};
-
-/* ═══════════════════════════════════════
-   DWELL ENGINE
-   Grace period + resume on re-enter
-═══════════════════════════════════════ */
-const GRACE_MS = 400;
-
-function makeDwellBtn(el, onTrigger) {
-  const fillEl = el.querySelector('.fill');
-  el._dwelling = false; el._clicked = false;
-  el._pausedAt = 0; el._graceTimer = null;
-
-  function startDwell() {
-    if (el._clicked || el._dwelling) return;
-    cancelGrace();
-    el._dwelling = true;
-    el._start = performance.now() - el._pausedAt;
-    function tick(now) {
-      if (!el._dwelling) return;
-      const elapsed = now - el._start;
-      const pct = Math.min(elapsed / dwellTime * 100, 100);
-      fillEl.style.transition = 'none';
-      fillEl.style.width = pct + '%';
-      if (elapsed >= dwellTime) {
-        el._clicked = true; el._dwelling = false; el._pausedAt = 0;
-        fillEl.style.width = '100%';
-        el.classList.add('triggered');
-        setTimeout(() => el.classList.remove('triggered'), 400);
-        onTrigger(el);
-      } else { el._timer = requestAnimationFrame(tick); }
-    }
-    el._timer = requestAnimationFrame(tick);
-  }
-
-  function pauseDwell() {
-    if (!el._dwelling) return;
-    el._dwelling = false;
-    cancelAnimationFrame(el._timer);
-    el._pausedAt = performance.now() - el._start;
-  }
-
-  function cancelGrace() {
-    if (el._graceTimer) { clearTimeout(el._graceTimer); el._graceTimer = null; }
-  }
-
-  function onEnter() {
-    el._hovered = true;
-    if (!el._clicked) startDwell();
-  }
-  function onLeave() {
-    el._hovered = false; el._clicked = false;
-    pauseDwell();
-    cancelGrace();
-    el._graceTimer = setTimeout(() => {
-      el._pausedAt = 0;
-      fillEl.style.transition = 'width 0.25s ease';
-      fillEl.style.width = '0%';
-    }, GRACE_MS);
-  }
-
-  el.addEventListener('mouseenter', onEnter);
-  el.addEventListener('mouseleave', onLeave);
-  el._gazeEnter = onEnter;
-  el._gazeLeave = onLeave;
-}
-
-/* ═══════════════════════════════════════
-   BUILD PROMPTS
-═══════════════════════════════════════ */
-const promptsGrid = document.getElementById('prompts-grid');
-PROMPTS.forEach(p => {
-  const btn = document.createElement('div');
-  btn.className = 'dwell-btn prompt-btn';
-  btn.style.cssText = `background:${p.bg};border-color:${p.fill};color:#fff`;
-  btn.innerHTML = `<div class="fill" style="background:${p.fill}"></div><span class="label">${p.label}</span>`;
-  promptsGrid.appendChild(btn);
-  makeDwellBtn(btn, () => speak(p.speak));
-});
-
-/* ═══════════════════════════════════════
-   BUILD KEYBOARD
-═══════════════════════════════════════ */
-const kbRows = document.getElementById('kb-rows');
-let typedText = '';
-function updateTyped() { document.getElementById('typed-span').textContent = typedText; }
-
-KB_ROWS.forEach(row => {
-  const rowEl = document.createElement('div');
-  rowEl.className = 'kb-row';
-  row.forEach(key => {
-    const btn = document.createElement('div');
-    btn.className = 'dwell-btn key-btn';
-    if (key === 'ESPAÇO') btn.classList.add('wider');
-    else if (key === '⌫') btn.classList.add('wide');
-    btn.style.cssText = 'background:#1a2535;border-color:#4dd0e1;color:#fff';
-    btn.innerHTML = `<div class="fill" style="background:#4dd0e1;opacity:0.6"></div><span class="label">${key}</span>`;
-    makeDwellBtn(btn, () => {
-      if (key === '⌫')           typedText = typedText.slice(0, -1);
-      else if (key === 'ESPAÇO') typedText += ' ';
-      else                       typedText += key;
-      updateTyped();
-    });
-    rowEl.appendChild(btn);
-  });
-  kbRows.appendChild(rowEl);
-});
-
-/* ═══════════════════════════════════════
-   SPEAK BUTTON
-═══════════════════════════════════════ */
-makeDwellBtn(document.getElementById('btn-speak'), () => {
-  if (typedText.trim()) speak(typedText.trim());
-});
-
-/* ═══════════════════════════════════════
-   CONTEXT SWITCHING
-═══════════════════════════════════════ */
-const btnPrompts  = document.getElementById('btn-prompts');
-const btnKeyboard = document.getElementById('btn-keyboard');
-const promptsView = document.getElementById('prompts-grid');
-const keyboardView= document.getElementById('keyboard-view');
-
-function showPrompts() {
-  promptsView.style.display = 'grid'; keyboardView.style.display = 'none';
-  btnPrompts.classList.add('disabled'); btnKeyboard.classList.remove('disabled');
-}
-function showKeyboard() {
-  promptsView.style.display = 'none'; keyboardView.style.display = 'flex';
-  btnKeyboard.classList.add('disabled'); btnPrompts.classList.remove('disabled');
-}
-makeDwellBtn(btnPrompts,  showPrompts);
-makeDwellBtn(btnKeyboard, showKeyboard);
-showPrompts();
-
-/* ═══════════════════════════════════════
-   DWELL SPEED CONTROL
-═══════════════════════════════════════ */
-const dwellDisplay = document.getElementById('dwell-display');
-document.getElementById('speed-up').addEventListener('click', () => {
-  dwellTime = Math.min(dwellTime + 100, 5000); dwellDisplay.textContent = dwellTime + ' ms';
-});
-document.getElementById('speed-down').addEventListener('click', () => {
-  dwellTime = Math.max(dwellTime - 100, 100); dwellDisplay.textContent = dwellTime + ' ms';
-});
-
-/* ═══════════════════════════════════════
-   GAZE STABILIZATION ENGINE
-   Applied to BOTH GazeCloud and mouse fallback.
-   1. Weighted smoothing (recent frames weighted more)
-   2. Hysteresis (must be outside button N frames to leave)
-   3. Gravitational well (expanded exit zone)
-   4. Grace period + dwell resume (in makeDwellBtn above)
-═══════════════════════════════════════ */
-const SMOOTH_N    = 14;   // smoothing buffer size
-const LEAVE_FRAMES = 8;   // frames outside before confirming leave
-const GRAVITY_PX  = 30;   // extra px around current button before exit counts
-
-const gazeBuffer = [];
-let gazeCurrentEl = null;
-let leaveCounter  = 0;
-const gazeDot = document.getElementById('gaze-dot');
-const faceLostBanner = document.getElementById('face-lost-banner');
-
-function weightedSmooth(x, y) {
-  gazeBuffer.push({ x, y });
-  if (gazeBuffer.length > SMOOTH_N) gazeBuffer.shift();
-  let wx = 0, wy = 0, wt = 0;
-  gazeBuffer.forEach((p, i) => {
-    const w = i + 1;
-    wx += p.x * w; wy += p.y * w; wt += w;
-  });
-  return { x: wx / wt, y: wy / wt };
-}
-
-function isInsideWithGravity(el, x, y) {
-  if (!el) return false;
-  const r = el.getBoundingClientRect();
-  return x >= r.left - GRAVITY_PX && x <= r.right  + GRAVITY_PX &&
-         y >= r.top  - GRAVITY_PX && y <= r.bottom + GRAVITY_PX;
-}
-
-function dwellBtnAt(x, y) {
-  const el = document.elementFromPoint(x, y);
-  return el ? el.closest('.dwell-btn:not(.disabled)') : null;
-}
-
-function processGaze(rawX, rawY) {
-  const { x, y } = weightedSmooth(rawX, rawY);
-
-  gazeDot.style.display = 'block';
-  gazeDot.style.left = x + 'px';
-  gazeDot.style.top  = y + 'px';
-
-  const rawTarget = dwellBtnAt(x, y);
-
-  if (rawTarget === gazeCurrentEl) {
-    leaveCounter = 0;
-    return;
-  }
-
-  // Still inside gravity well of current button?
-  if (gazeCurrentEl && isInsideWithGravity(gazeCurrentEl, x, y)) {
-    leaveCounter = 0;
-    return;
-  }
-
-  // Outside gravity well — count frames
-  leaveCounter++;
-  if (leaveCounter < LEAVE_FRAMES) return;
-
-  // Confirmed switch
-  leaveCounter = 0;
-  if (gazeCurrentEl?._gazeLeave) gazeCurrentEl._gazeLeave();
-  gazeCurrentEl = rawTarget;
-  if (gazeCurrentEl?._gazeEnter) gazeCurrentEl._gazeEnter();
-}
-
-/* ═══════════════════════════════════════
-   GAZECLOUD INTEGRATION
-═══════════════════════════════════════ */
-let gazeActive = false;
-
-function launchApp() {
-  document.getElementById('startup-overlay').style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
-  gazeActive = true;
-}
-
-function initGazeCloud() {
-  const status = document.getElementById('startup-status');
-
-  // Disable click recalibration — patient cannot click
-  GazeCloudAPI.UseClickRecalibration = false;
-
-  GazeCloudAPI.OnCalibrationComplete = function () {
-    status.textContent = '✓ Calibração concluída!';
-    setTimeout(launchApp, 800);
-  };
-
-  GazeCloudAPI.OnCamDenied = function () {
-    // Bring back the overlay so the user can see the error message
-    document.getElementById('startup-overlay').style.display = 'flex';
-    status.textContent = '⚠ Câmera negada — verifique as permissões do browser.';
-    document.getElementById('btn-start-gaze').disabled = false;
-  };
-
-  GazeCloudAPI.OnError = function (msg) {
-    console.warn('GazeCloud error:', msg);
-    // Bring back the overlay so the user can see the error message
-    document.getElementById('startup-overlay').style.display = 'flex';
-    status.textContent = '⚠ Erro: ' + msg;
-    // Show domain registration hint if it looks like an auth error
-    if (msg && (msg.includes('domain') || msg.includes('origin') || msg.includes('register') || msg.includes('unauthorized'))) {
-      document.getElementById('reg-warning').style.display = 'block';
-    }
-    document.getElementById('btn-start-gaze').disabled = false;
-  };
-
-  GazeCloudAPI.OnResult = function (GazeData) {
-    if (!gazeActive) return;
-
-    // state: 0 = valid, -1 = face lost, 1 = uncalibrated
-    if (GazeData.state === -1) {
-      faceLostBanner.style.display = 'block';
-      // Gaze lost — leave current button
-      if (gazeCurrentEl?._gazeLeave) gazeCurrentEl._gazeLeave();
-      gazeCurrentEl = null;
-      leaveCounter = 0;
-      gazeDot.style.display = 'none';
-      return;
-    }
-
-    faceLostBanner.style.display = 'none';
-
-    if (GazeData.state === 1) return; // uncalibrated, skip
-
-    // docX/docY are document coordinates — same as viewport when no scroll
-    processGaze(GazeData.docX, GazeData.docY);
-  };
-
-  status.textContent = 'Iniciando câmera e calibração…';
-  document.getElementById('btn-start-gaze').disabled = true;
-
-  
-  try {
-    GazeCloudAPI.StartEyeTracking();
-    // Hide the overlay immediately so it doesn't block GazeCloud's UI elements
-    document.getElementById('startup-overlay').style.display = 'none';
-  } catch(e) {
-    status.textContent = '⚠ GazeCloudAPI não carregou. Verifique a ligação à internet.';
-    document.getElementById('btn-start-gaze').disabled = false;
-    console.error(e);
-  }
-}
-
-document.getElementById('btn-start-gaze').addEventListener('click', initGazeCloud);
-
-document.getElementById('btn-skip-cal').addEventListener('click', () => {
-  // Mouse-only fallback for testing
-  launchApp();
-  document.addEventListener('mousemove', e => {
-    if (gazeActive) processGaze(e.clientX, e.clientY);
-  });
-});
-</script>
 </body>
 </html>

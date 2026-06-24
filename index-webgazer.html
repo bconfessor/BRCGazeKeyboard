@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AAC – Comunicação por Olhar</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0a0e1a;
+    --surface:   #111827;
+    --border: \t #1e2d45;
+    --text:      #f0f4ff;
+    --muted:     #7a8aaa;
+
+    --c-yes:     #166534;  --c-yes-fill:  #22c55e;
+    --c-no:      #7f1d1d;  --c-no-fill:   #ef4444;
+    --c-lower:   #1e3a5f;  --c-lower-fill:#3b82f6;
+    --c-higher:  #1e3a5f;  --c-higher-fill:#60a5fa;
+    --c-pain:    #4c1d95;  --c-pain-fill: #a855f7;
+    --c-hungry:  #78350f;  --c-hungry-fill:#f59e0b;
+    --c-thirsty: #164e63;  --c-thirsty-fill:#06b6d4;
+    --c-help:    #7f1d1d;  --c-help-fill:  #f97316;
+    --c-kb:      #1e3a5f;  --c-kb-fill:   #3b82f6;
+    --c-prompts: #166534;  --c-prompts-fill:#22c55e;
+    --c-speak:   #4c1d95;  --c-speak-fill: #a855f7;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    height: 100vh; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+
+  /* ══════════════════════════════════════════
+     CALIBRATION SCREEN
+  ══════════════════════════════════════════ */
+  #calibration-screen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 1000;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-start;
+    padding-top: 24px;
+  }
+  #calibration-screen h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 6px; }
+  #calibration-screen p  { color: var(--muted); font-size: 0.95rem; text-align: center; max-width: 520px; line-height: 1.6; margin-bottom: 4px; }
+  #calibration-screen .hint { font-size: 0.8rem; color: #3a5070; margin-bottom: 14px; }
+
+  #cal-bar-wrap {
+    width: 320px; height: 8px;
+    background: var(--surface); border-radius: 4px;
+    overflow: hidden; margin-bottom: 6px;
+  }
+  #cal-bar { height: 100%; width: 0%; background: #3b82f6; border-radius: 4px; transition: width 0.3s; }
+  #calibration-progress { font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; }
+  #cal-status { font-size: 0.82rem; color: #4a9060; min-height: 1.2em; }
+
+  /* calibration phase label */
+  #cal-phase {
+    margin-top: 6px; margin-bottom: 0;
+    font-size: 0.82rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #4a6a9a;
+  }
+
+  .cal-dot {
+    width: 52px; height: 52px; border-radius: 50%;
+    position: absolute; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; font-weight: 700;
+    transition: transform 0.15s, background 0.15s;
+  }
+  /* Phase 1: click to calibrate (blue) */
+  .cal-dot.phase-click {
+    background: #1e3a5f; border: 3px solid #3b82f6; color: #7aa8f0;
+  }
+  .cal-dot.phase-click:hover { transform: scale(1.15); background: #3b82f6; color: #fff; }
+  .cal-dot.phase-click.active { animation: pulse-dot 0.7s infinite alternate; }
+  .cal-dot.counting { background: #7f1d1d !important; border-color: #ef4444 !important; color: #fff !important; }
+  .cal-dot.done { background: #166534 !important; border: 3px solid #22c55e !important; color: #fff !important; }
+
+  /* Phase 2: look-only accuracy dots (orange) */
+  .cal-dot.phase-look {
+    background: #78350f; border: 3px solid #f59e0b; color: #fcd34d;
+    pointer-events: none; /* no click needed, just look */
+  }
+  .cal-dot.phase-look.active { animation: pulse-orange 0.7s infinite alternate; }
+
+  @keyframes pulse-dot {
+    from { box-shadow: 0 0 0 0 rgba(59,130,246,0.7); }
+    to   { box-shadow: 0 0 0 20px rgba(59,130,246,0); }
+  }
+  @keyframes pulse-orange {
+    from { box-shadow: 0 0 0 0 rgba(245,158,11,0.7); }
+    to   { box-shadow: 0 0 0 20px rgba(245,158,11,0); }
+  }
+
+  /* Mini webcam preview during calibration — show full face, no clipping */
+  #cal-video-wrap {
+    position: absolute; bottom: 16px; left: 16px;
+    width: 200px; height: 150px;
+    border: 2px solid var(--border); border-radius: 10px;
+    overflow: hidden; background: #000;
+  }
+  /* WebGazer video inside that wrap — scale down to fit */
+  #cal-video-wrap video,
+  #cal-video-wrap canvas {
+    position: absolute !important;
+    top: 50% !important; left: 50% !important;
+    transform: translate(-50%, -50%) scale(0.31) !important;
+    transform-origin: center center !important;
+    width: 640px !important; height: 480px !important;
+    max-width: none !important;
+  }
+
+  #skip-cal {
+    position: absolute; bottom: 22px; right: 28px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted); padding: 8px 20px;
+    border-radius: 8px; cursor: pointer; font-size: 0.9rem;
+  }
+  #skip-cal:hover { border-color: var(--muted); color: var(--text); }
+
+  /* ══════════════════════════════════════════
+     MAIN APP
+  ══════════════════════════════════════════ */
+  #app {
+    display: none; flex-direction: column;
+    height: 100vh; padding: 12px; gap: 10px;
+  }
+
+  #topbar {
+    display: flex; justify-content: space-between;
+    align-items: center; flex-shrink: 0; height: 64px;
+  }
+
+  .ctx-btn {
+    position: relative; overflow: hidden;
+    padding: 10px 24px; border-radius: 12px; border: 2px solid;
+    font-size: 1rem; font-weight: 700; letter-spacing: 0.04em;
+    cursor: pointer; min-width: 130px; text-align: center;
+    user-select: none; transition: opacity 0.2s;
+  }
+  .ctx-btn.disabled { opacity: 0.25; pointer-events: none; }
+  #btn-prompts  { background: var(--c-prompts);  border-color: var(--c-prompts-fill); color: #fff; }
+  #btn-keyboard { background: var(--c-kb);        border-color: var(--c-kb-fill);      color: #fff; }
+
+  #content {
+    flex: 1; display: flex;
+    align-items: center; justify-content: center; min-height: 0;
+  }
+
+  /* Prompts */
+  #prompts-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 14px; width: 100%; max-width: 1100px;
+    height: 100%; max-height: 480px;
+  }
+
+  /* Keyboard */
+  #keyboard-view {
+    display: none; flex-direction: column;
+    align-items: center; gap: 10px;
+    width: 100%; max-width: 1100px;
+  }
+  #typed-text {
+    width: 100%; min-height: 72px;
+    background: var(--surface); border: 2px solid var(--border);
+    border-radius: 14px; padding: 16px 22px;
+    font-size: 1.8rem; font-weight: 600; color: var(--text);
+    letter-spacing: 0.03em; word-break: break-word;
+    display: flex; align-items: center;
+  }
+  #typed-text span.cursor {
+    display: inline-block; width: 3px; height: 1.8rem;
+    background: var(--text); margin-left: 4px;
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  #kb-rows { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+  .kb-row  { display: flex; justify-content: center; gap: 8px; }
+
+  /* ══════════════════════════════════════════
+     DWELL BUTTON
+  ══════════════════════════════════════════ */
+  .dwell-btn {
+    position: relative; overflow: hidden;
+    border-radius: 16px; border: 3px solid transparent;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; user-select: none;
+    font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+    transition: transform 0.1s;
+  }
+  .dwell-btn:active { transform: scale(0.97); }
+  .dwell-btn .fill {
+    position: absolute; inset: 0; width: 0%;
+    transition: none; z-index: 0; border-radius: 13px;
+  }
+  .dwell-btn .label { position: relative; z-index: 1; pointer-events: none; }
+  .dwell-btn.triggered { animation: flash-btn 0.35s ease; }
+  @keyframes flash-btn { 0%{filter:brightness(1)} 40%{filter:brightness(2.2)} 100%{filter:brightness(1)} }
+
+  .prompt-btn { font-size: clamp(1.4rem, 2.8vw, 2.2rem); }
+
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     KEY BUTTON SIZE — adjust here
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  .key-btn        { width: 114px;  height: 104px; font-size: 1.25rem; border-radius: 15px; flex-shrink: 0; }
+  .key-btn.wide   { width: 280px; }
+  .key-btn.wider  { width: 700px; }
+
+  #btn-speak {
+    align-self: flex-end; width: 180px; height: 56px; font-size: 1rem;
+    background: var(--c-speak); border-color: var(--c-speak-fill); color: #fff;
+  }
+  #btn-speak .fill { background: var(--c-speak-fill); }
+
+  /* Bottom bar */
+  #bottombar {
+    flex-shrink: 0; display: flex;
+    justify-content: flex-end; align-items: center;
+    gap: 10px; height: 48px; padding-right: 4px;
+  }
+  #dwell-label   { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.06em; text-transform: uppercase; }
+  #dwell-display {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 4px 14px;
+    font-size: 1rem; font-weight: 700; color: var(--text);
+    min-width: 80px; text-align: center;
+  }
+  .speed-btn {
+    width: 38px; height: 38px; border-radius: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); font-size: 1.1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .speed-btn:hover { background: var(--border); border-color: var(--muted); }
+
+  /* Gaze dot */
+  #gaze-dot {
+    position: fixed; width: 20px; height: 20px; border-radius: 50%;
+    background: rgba(96,165,250,0.75); border: 2px solid #fff;
+    pointer-events: none; transform: translate(-50%,-50%);
+    z-index: 900; display: none;
+    transition: left 0.08s cubic-bezier(0.25, 1, 0.5, 1), top 0.08s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  /* ══════════════════════════════════════════
+     WEBGAZER VIDEO — main app: bottom-left, full face
+     We DON'T clip it; we scale it inside its container
+  ══════════════════════════════════════════ */
+  #webgazerVideoContainer {
+    position: fixed !important;
+    bottom: 56px !important; left: 8px !important;
+    width: 200px !important; height: 150px !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    background: #000 !important;
+    overflow: hidden !important;
+    z-index: 500 !important;
+    opacity: 0.7 !important;
+  }
+  /* Scale the actual video/canvas DOWN to fit inside 200×150 */
+  #webgazerVideoContainer video,
+  #webgazerVideoContainer canvas {
+    position: absolute !important;
+    top: 50% !important; left: 50% !important;
+    transform: translate(-50%, -50%) scale(0.31) !important;
+    transform-origin: center center !important;
+    width: 640px !important; height: 480px !important;
+    max-width: none !important;
+  }
+  #webgazerFaceOverlay, #webgazerFaceFeedbackBox { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="gaze-dot"></div>
+
+<div id="calibration-screen">
+  <h1>Calibração do Olhar</h1>
+  <p id="cal-instruction">
+    <strong>Fase 1:</strong> Fixe o olhar no ponto azul e peça para o assistente <strong>clicar nele</strong>.<br>
+    Mantenha os olhos colados no centro do ponto durante a contagem regressiva de estabilização.
+  </p>
+  <p class="hint">Mantenha a cabeça estável. A câmera já está ativa — veja abaixo à esquerda.</p>
+  <div id="cal-bar-wrap"><div id="cal-bar"></div></div>
+  <div id="calibration-progress">0 / 9 pontos</div>
+  <div id="cal-status">Iniciando câmera…</div>
+  <div id="cal-phase">FASE 1 — CALIBRAÇÃO</div>
+
+  <div id="cal-video-wrap"></div>
+
+  <button id="skip-cal">Pular calibração</button>
+</div>
+
+<div id="app">
+  <div id="topbar">
+    <div id="btn-prompts" class="ctx-btn dwell-btn disabled">
+      <div class="fill" style="background:var(--c-prompts-fill)"></div>
+      <span class="label">📋 Prompts</span>
+    </div>
+    <div id="btn-keyboard" class="ctx-btn dwell-btn">
+      <div class="fill" style="background:var(--c-kb-fill)"></div>
+      <span class="label">⌨️ Teclado</span>
+    </div>
+  </div>
+
+  <div id="content">
+    <div id="prompts-grid"></div>
+    <div id="keyboard-view">
+      <div id="typed-text"><span id="typed-span"></span><span class="cursor"></span></div>
+      <div id="kb-rows"></div>
+      <div id="btn-speak" class="dwell-btn ctx-btn">
+        <div class="fill"></div>
+        <span class="label">🔊 Falar</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="bottombar">
+    <span id="dwell-label">Tempo de fixação</span>
+    <div id="dwell-display">1000 ms</div>
+    <button class="speed-btn" id="speed-down">▼</button>
+    <button class="speed-btn" id="speed-up">▲</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/webgazer@2.1.0/dist/webgazer.min.js"></script>
+<script>
+/* ═══════════════════════════════════════
+   CONFIG
+═══════════════════════════════════════ */
+let dwellTime = 1000;
+
+const PROMPTS = [
+  { label:'Sim',   speak:'Sim',   bg:'var(--c-yes)',     fill:'var(--c-yes-fill)'     },
+  { label:'Não',   speak:'Não',   bg:'var(--c-no)',      fill:'var(--c-no-fill)'      },
+  { label:'Menos', speak:'Menos', bg:'var(--c-lower)',   fill:'var(--c-lower-fill)'   },
+  { label:'Mais',  speak:'Mais',  bg:'var(--c-higher)',  fill:'var(--c-higher-fill)'  },
+  { label:'Dor',   speak:'Dor',   bg:'var(--c-pain)',    fill:'var(--c-pain-fill)'    },
+  { label:'Fome',  speak:'Fome',  bg:'var(--c-hungry)',  fill:'var(--c-hungry-fill)'  },
+  { label:'Sede',  speak:'Sede',  bg:'var(--c-thirsty)', fill:'var(--c-thirsty-fill)' },
+  { label:'Ajuda', speak:'Ajuda', bg:'var(--c-help)',    fill:'var(--c-help-fill)'    },
+];
+
+const KB_ROWS = [
+  ['Q','W','E','R','T','Y','U','I','O','P'],
+  ['A','S','D','F','G','H','J','K','L'],
+  ['Z','X','C','V','B','N','M','⌫'],
+  ['ESPAÇO'],
+];
+
+/* ═══════════════════════════════════════
+   SPEECH
+═══════════════════════════════════════ */
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'pt-BR';
+  const voices = speechSynthesis.getVoices();
+  const ptVoice = voices.find(v => v.lang.startsWith('pt'));
+  if (ptVoice) u.voice = ptVoice;
+  u.rate = 0.95;
+  speechSynthesis.speak(u);
+}
+if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => {};
+
+/* ═══════════════════════════════════════
+   DWELL ENGINE
+═══════════════════════════════════════ */
+const GRACE_MS = 400; // ms to hold fill before resetting on leave
+
+function makeDwellBtn(el, onTrigger) {
+  const fillEl = el.querySelector('.fill');
+
+  // State
+  el._dwelling  = false;
+  el._clicked   = false;
+  el._pausedAt  = 0;      // elapsed ms when dwell was paused
+  el._graceTimer = null;  // setTimeout id for grace period
+
+  function startDwell() {
+    if (el._clicked || el._dwelling) return;
+    cancelGrace(); // cancel any pending reset
+    el._dwelling = true;
+    const resumeOffset = el._pausedAt;
+    el._start = performance.now() - resumeOffset;
+
+    function tick(now) {
+      if (!el._dwelling) return;
+      const elapsed = now - el._start;
+      const pct = Math.min(elapsed / dwellTime * 100, 100);
+      fillEl.style.transition = 'none';
+      fillEl.style.width = pct + '%';
+      if (elapsed >= dwellTime) {
+        el._clicked  = true;
+        el._dwelling = false;
+        el._pausedAt = 0;
+        fillEl.style.width = '100%';
+        el.classList.add('triggered');
+        setTimeout(() => el.classList.remove('triggered'), 400);
+        onTrigger(el);
+      } else {
+        el._timer = requestAnimationFrame(tick);
+      }
+    }
+    el._timer = requestAnimationFrame(tick);
+  }
+
+  function pauseDwell() {
+    if (!el._dwelling) return;
+    el._dwelling = false;
+    cancelAnimationFrame(el._timer);
+    el._pausedAt = performance.now() - el._start;
+  }
+
+  function cancelGrace() {
+    if (el._graceTimer) { clearTimeout(el._graceTimer); el._graceTimer = null; }
+  }
+
+  function resetFill() {
+    el._pausedAt = 0;
+    fillEl.style.transition = 'width 0.25s ease';
+    fillEl.style.width = '0%';
+  }
+
+  function onEnter() {
+    el._hovered = true;
+    if (!el._clicked) startDwell();
+  }
+
+  function onLeave() {
+    el._hovered = false;
+    el._clicked = false; 
+    pauseDwell();
+    cancelGrace();
+    el._graceTimer = setTimeout(() => {
+      resetFill();
+    }, GRACE_MS);
+  }
+
+  el.addEventListener('mouseenter', onEnter);
+  el.addEventListener('mouseleave', onLeave);
+  el._gazeEnter = onEnter;
+  el._gazeLeave = onLeave;
+}
+
+/* ═══════════════════════════════════════
+   BUILD PROMPTS
+═══════════════════════════════════════ */
+const promptsGrid = document.getElementById('prompts-grid');
+PROMPTS.forEach(p => {
+  const btn = document.createElement('div');
+  btn.className = 'dwell-btn prompt-btn';
+  btn.style.cssText = `background:${p.bg};border-color:${p.fill};color:#fff`;
+  btn.innerHTML = `<div class="fill" style="background:${p.fill}"></div><span class="label">${p.label}</span>`;
+  promptsGrid.appendChild(btn);
+  makeDwellBtn(btn, () => speak(p.speak));
+});
+
+/* ═══════════════════════════════════════
+   BUILD KEYBOARD
+═══════════════════════════════════════ */
+const kbRows = document.getElementById('kb-rows');
+let typedText = '';
+function updateTyped() { document.getElementById('typed-span').textContent = typedText; }
+
+KB_ROWS.forEach(row => {
+  const rowEl = document.createElement('div');
+  rowEl.className = 'kb-row';
+  row.forEach(key => {
+    const btn = document.createElement('div');
+    btn.className = 'dwell-btn key-btn';
+    if (key === 'ESPAÇO') btn.classList.add('wider');
+    else if (key === '⌫') btn.classList.add('wide');
+    btn.style.cssText = 'background:#1a2535;border-color:#4dd0e1;color:#fff';
+    btn.innerHTML = `<div class="fill" style="background:#4dd0e1;opacity:0.6"></div><span class="label">${key}</span>`;
+    makeDwellBtn(btn, () => {
+      if (key === '⌫')           typedText = typedText.slice(0, -1);
+      else if (key === 'ESPAÇO') typedText += ' ';
+      else                       typedText += key;
+      updateTyped();
+    });
+    rowEl.appendChild(btn);
+  });
+  kbRows.appendChild(rowEl);
+});
+
+/* ═══════════════════════════════════════
+   SPEAK BUTTON
+═══════════════════════════════════════ */
+makeDwellBtn(document.getElementById('btn-speak'), () => {
+  if (typedText.trim()) speak(typedText.trim());
+});
+
+/* ═══════════════════════════════════════
+   CONTEXT SWITCHING
+═══════════════════════════════════════ */
+const btnPrompts  = document.getElementById('btn-prompts');
+const btnKeyboard = document.getElementById('btn-keyboard');
+const promptsView = document.getElementById('prompts-grid');
+const keyboardView= document.getElementById('keyboard-view');
+
+function showPrompts() {
+  promptsView.style.display = 'grid'; keyboardView.style.display = 'none';
+  btnPrompts.classList.add('disabled'); btnKeyboard.classList.remove('disabled');
+}
+function showKeyboard() {
+  promptsView.style.display = 'none'; keyboardView.style.display = 'flex';
+  btnKeyboard.classList.add('disabled'); btnPrompts.classList.remove('disabled');
+}
+makeDwellBtn(btnPrompts,  showPrompts);
+makeDwellBtn(btnKeyboard, showKeyboard);
+showPrompts();
+
+/* ═══════════════════════════════════════
+   DWELL SPEED CONTROL
+═══════════════════════════════════════ */
+const dwellDisplay = document.getElementById('dwell-display');
+document.getElementById('speed-up').addEventListener('click', () => {
+  dwellTime = Math.min(dwellTime + 100, 5000); dwellDisplay.textContent = dwellTime + ' ms';
+});
+document.getElementById('speed-down').addEventListener('click', () => {
+  dwellTime = Math.max(dwellTime - 100, 100); dwellDisplay.textContent = dwellTime + ' ms';
+});
+
+/* ═══════════════════════════════════════
+   WEBGAZER SETUP & ANTI-JITTER FIREWALL
+═══════════════════════════════════════ */
+window.saveDataAcrossSessions = true;
+
+const gazeDot = document.getElementById('gaze-dot');
+let gazeListenerActive = false;
+
+/* ── UPGRADE 2: ADAPTIVE MEDIAN OUTLIER FILTER ──
+   We collect raw coordinates inside sliding windows. We take the median coordinate
+   first to completely prune hardware-drop and blink micro-teleportation spikes.
+   Then, we slide it through a weighted linear window to guarantee extreme fluid motion. */
+const FILTER_WINDOW = 9; 
+const rawXBuffer = [];
+const rawYBuffer = [];
+const smoothXBuffer = [];
+const smoothYBuffer = [];
+const SMOOTH_N = 8; 
+
+function getMedian(arr) {
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function smoothGaze(x, y) {
+  rawXBuffer.push(x);
+  rawYBuffer.push(y);
+  if (rawXBuffer.length > FILTER_WINDOW) {
+    rawXBuffer.shift();
+    rawYBuffer.shift();
+  }
+
+  // Pure mathematical median calculation (Outlier rejection layer)
+  const medX = getMedian(rawXBuffer);
+  const medY = getMedian(rawYBuffer);
+
+  // Moving Average pipeline integration (Smoothing step layer)
+  smoothXBuffer.push(medX);
+  smoothYBuffer.push(medY);
+  if (smoothXBuffer.length > SMOOTH_N) {
+    smoothXBuffer.shift();
+    smoothYBuffer.shift();
+  }
+
+  let sumX = 0, sumY = 0, sumW = 0;
+  for (let i = 0; i < smoothXBuffer.length; i++) {
+    const w = i + 1; 
+    sumX += smoothXBuffer[i] * w;
+    sumY += smoothYBuffer[i] * w;
+    sumW += w;
+  }
+  return { x: sumX / sumW, y: sumY / sumW };
+}
+
+/* ── CONFIG INTERACTION PROPERTIES ── */
+const LEAVE_FRAMES = 8;
+let gazeCurrentEl  = null;
+let leaveCounter   = 0;
+const GRAVITY_PX = 32; // Expanded target field safety depth bound
+let snappedEl = null;   // Active Magnetic snap reference point tracking container
+
+function isInsideWithGravity(el, x, y) {
+  if (!el) return false;
+  const r = el.getBoundingClientRect();
+  return x >= r.left  - GRAVITY_PX &&
+         x <= r.right + GRAVITY_PX &&
+         y >= r.top   - GRAVITY_PX &&
+         y <= r.bottom + GRAVITY_PX;
+}
+
+function dwellBtnAt(x, y) {
+  const el = document.elementFromPoint(x, y);
+  if (!el) return null;
+  return el.closest('.dwell-btn:not(.disabled)');
+}
+
+function onGaze(data) {
+  if (!data) return;
+  const { x, y } = smoothGaze(data.x, data.y);
+
+  if (!gazeListenerActive) {
+    gazeDot.style.display = 'block';
+    gazeDot.style.left = x + 'px';
+    gazeDot.style.top  = y + 'px';
+    return;
+  }
+
+  /* ── UPGRADE 4: MAGNETIC TARGET SNAPPING SYSTEM ── */
+  if (snappedEl && !isInsideWithGravity(snappedEl, x, y)) {
+    snappedEl = null; // Break out of attraction field if eye leaves gravity limits
+  }
+
+  if (!snappedEl) {
+    const target = dwellBtnAt(x, y);
+    if (target) snappedEl = target; // Lock into the target's gravity well
+  }
+
+  // Adjust display coordinates of the tracking target interface
+  let displayX = x;
+  let displayY = y;
+  if (snappedEl) {
+    const rect = snappedEl.getBoundingClientRect();
+    displayX = rect.left + rect.width / 2;
+    displayY = rect.top + rect.height / 2;
+  }
+
+  gazeDot.style.display = 'block';
+  gazeDot.style.left = displayX + 'px';
+  gazeDot.style.top  = displayY + 'px';
+
+  // Redirect filtered snapped coordinate streams straight into the Dwell Engine
+  const rawTarget = snappedEl;
+
+  if (rawTarget === gazeCurrentEl) {
+    leaveCounter = 0;
+    return;
+  }
+
+  if (gazeCurrentEl && isInsideWithGravity(gazeCurrentEl, x, y)) {
+    leaveCounter = 0;
+    return;
+  }
+
+  leaveCounter++;
+  if (leaveCounter < LEAVE_FRAMES) return;
+
+  leaveCounter = 0;
+  if (gazeCurrentEl?._gazeLeave) gazeCurrentEl._gazeLeave();
+  gazeCurrentEl = rawTarget;
+  if (gazeCurrentEl?._gazeEnter) gazeCurrentEl._gazeEnter();
+}
+
+webgazer.setGazeListener(onGaze);
+
+webgazer.begin().then(() => {
+  /* ── UPGRADE 1: ACTIVATE HIDDEN KALMAN FILTER PREDICTION ── */
+  webgazer.applyKalmanFilter(true);
+
+  // Remove mouse inputs completely to avoid cross-device coordinate pollution
+  webgazer.removeMouseEventListeners();
+
+  webgazer.showVideoPreview(true);
+  webgazer.showPredictionPoints(false);
+  webgazer.showFaceOverlay(false);
+  webgazer.showFaceFeedbackBox(false);
+
+  document.getElementById('cal-status').textContent = '✓ Câmera ativa — clique nos pontos para iniciar';
+
+  const wgContainer = document.getElementById('webgazerVideoContainer');
+  const calVideoWrap = document.getElementById('cal-video-wrap');
+  if (wgContainer && calVideoWrap) {
+    calVideoWrap.appendChild(wgContainer);
+    wgContainer.style.cssText = 'position:relative!important;top:auto!important;left:auto!important;width:100%!important;height:100%!important;opacity:1!important;border:none!important;border-radius:0!important;';
+  }
+}).catch(err => {
+  console.warn('WebGazer error:', err);
+  document.getElementById('cal-status').textContent = '⚠ Câmera não disponível — use o mouse para testar';
+});
+
+/* ═══════════════════════════════════════
+   CALIBRATION — STAGGERED STARE COUNTDOWNS
+═══════════════════════════════════════ */
+const CAL_POSITIONS = [
+  [10,10],[50,10],[90,10],
+  [10,50],[50,50],[90,50],
+  [10,90],[50,90],[90,90],
+];
+
+const ACCURACY_POSITIONS = [
+  [30,30],[70,30],[30,70],[70,70],
+];
+
+let calDone = 0;
+const calScreen   = document.getElementById('calibration-screen');
+const calProgress = document.getElementById('calibration-progress');
+const calBar      = document.getElementById('cal-bar');
+const calStatus   = document.getElementById('cal-status');
+const calPhase    = document.getElementById('cal-phase');
+const calInstruct = document.getElementById('cal-instruction');
+const dots = [];
+
+/* ── UPGRADE 3: STAGGERED STARE INTERACTION PIPELINE (PHASE 1) ── */
+CAL_POSITIONS.forEach(([xPct, yPct], i) => {
+  const dot = document.createElement('div');
+  dot.className = 'cal-dot phase-click' + (i === 0 ? ' active' : '');
+  dot.style.left = `calc(${xPct}% - 26px)`;
+  dot.style.top  = `calc(${yPct}% - 26px)`;
+  dot.textContent = i + 1;
+
+  dot.addEventListener('click', () => {
+    if (dot.classList.contains('done') || dot.classList.contains('counting')) return;
+    dot.classList.add('counting');
+    
+    const rect = dot.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top  + rect.height / 2;
+    const startTime = performance.now();
+
+    function updateCountdown() {
+      const elapsed = performance.now() - startTime;
+      
+      if (elapsed < 1000) {
+        // First 1000ms: Ignore inputs completely, letting user fixate on target center
+        dot.textContent = Math.ceil((1500 - elapsed) / 1000) + 's';
+        requestAnimationFrame(updateCountdown);
+      } else if (elapsed < 1500) {
+        // Final 500ms: Stare is confirmed stationary. Record high-speed vector data streams.
+        dot.textContent = '●';
+        calStatus.textContent = `Capturando ponto ${i + 1}... Mantenha o olhar fixo!`;
+        webgazer.recordScreenPosition(cx, cy, 'click'); 
+        requestAnimationFrame(updateCountdown);
+      } else {
+        // Process next block sequence transitions
+        dot.classList.remove('counting');
+        dot.classList.add('done');
+        dot.textContent = '✓';
+        
+        calDone++;
+        calProgress.textContent = `${calDone} / 9 pontos`;
+        calBar.style.width = (calDone / 9 * 100) + '%';
+
+        if (calDone < CAL_POSITIONS.length) {
+          dots[calDone].classList.add('active');
+          calStatus.textContent = `✓ Ponto ${calDone} registrado`;
+        } else {
+          calStatus.textContent = '✓ Calibração completa! Iniciando verificação de precisão…';
+          setTimeout(startAccuracyPhase, 800);
+        }
+      }
+    }
+    requestAnimationFrame(updateCountdown);
+  });
+
+  calScreen.appendChild(dot);
+  dots.push(dot);
+});
+
+/* ── STAGGERED STARE INTERACTION PIPELINE (PHASE 2 - LOOK ONLY) ── */
+let accIdx = 0;
+const accDots = [];
+
+function startAccuracyPhase() {
+  dots.forEach(d => d.style.display = 'none');
+
+  calInstruct.innerHTML = '<strong>Fase 2:</strong> Olhe fixamente para cada ponto laranja sem piscar.<br>Eles vão capturar e avançar automaticamente.';
+  calPhase.textContent = 'FASE 2 — VERIFICAÇÃO DE PRECISÃO';
+  calProgress.textContent = '0 / 4 pontos';
+  calBar.style.width = '0%';
+
+  ACCURACY_POSITIONS.forEach(([xPct, yPct], i) => {
+    const dot = document.createElement('div');
+    dot.className = 'cal-dot phase-look';
+    dot.style.left = `calc(${xPct}% - 26px)`;
+    dot.style.top  = `calc(${yPct}% - 26px)`;
+    dot.textContent = i + 1;
+    calScreen.appendChild(dot);
+    accDots.push(dot);
+  });
+
+  showAccuracyDot(0);
+}
+
+function showAccuracyDot(idx) {
+  if (idx >= accDots.length) {
+    calStatus.textContent = '✓ Tudo pronto!';
+    setTimeout(finishCalibration, 600);
+    return;
+  }
+  const dot = accDots[idx];
+  dot.classList.add('active');
+  calProgress.textContent = `${idx + 1} / 4 pontos`;
+  calBar.style.width = ((idx + 1) / 4 * 100) + '%';
+  
+  const startTime = performance.now();
+  calStatus.textContent = `Olhe para o ponto ${idx + 1}…`;
+
+  function accuracyCountdown() {
+    const elapsed = performance.now() - startTime;
+    
+    if (elapsed < 1000) {
+      // Ignore first 1000ms setup window
+      dot.textContent = Math.ceil((1500 - elapsed) / 1000) + 's';
+      requestAnimationFrame(accuracyCountdown);
+    } else if (elapsed < 1500) {
+      // Gather mapping samples during final 500ms
+      dot.textContent = '●';
+      dot.style.background = '#7f1d1d';
+      dot.style.borderColor = '#ef4444';
+      calStatus.textContent = `Verificando precisão do ponto ${idx + 1}...`;
+      
+      const rect = dot.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top  + rect.height / 2;
+      webgazer.recordScreenPosition(cx, cy, 'click');
+      
+      requestAnimationFrame(accuracyCountdown);
+    } else {
+      dot.classList.remove('active');
+      dot.classList.add('done');
+      dot.textContent = '✓';
+      dot.style.background = '';
+      dot.style.borderColor = '';
+      showAccuracyDot(idx + 1);
+    }
+  }
+  requestAnimationFrame(accuracyCountdown);
+}
+
+function finishCalibration() {
+  gazeListenerActive = true;
+  calScreen.style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+
+  const wgContainer = document.getElementById('webgazerVideoContainer');
+  if (wgContainer) {
+    document.body.appendChild(wgContainer);
+    wgContainer.removeAttribute('style');
+  }
+}
+
+document.getElementById('skip-cal').addEventListener('click', () => {
+  gazeListenerActive = true;
+  calScreen.style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  const wgContainer = document.getElementById('webgazerVideoContainer');
+  if (wgContainer) { document.body.appendChild(wgContainer); wgContainer.removeAttribute('style'); }
+});
+</script>
+</body>
+</html>
