@@ -381,14 +381,31 @@ if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => {};
 
 /* ═══════════════════════════════════════
    DWELL ENGINE
+   Strategy 4: GRACE PERIOD RESUME
+   When gaze leaves a button, we don't immediately reset the fill.
+   Instead we wait GRACE_MS. If gaze returns within that window,
+   dwell resumes from _pausedAt (the elapsed ms when gaze left).
+   If grace period expires without return, fill resets to 0.
 ═══════════════════════════════════════ */
+const GRACE_MS = 400; // ms to hold fill before resetting on leave
+
 function makeDwellBtn(el, onTrigger) {
   const fillEl = el.querySelector('.fill');
 
+  // State
+  el._dwelling  = false;
+  el._clicked   = false;
+  el._pausedAt  = 0;      // elapsed ms when dwell was paused
+  el._graceTimer = null;  // setTimeout id for grace period
+
   function startDwell() {
     if (el._clicked || el._dwelling) return;
+    cancelGrace(); // cancel any pending reset
     el._dwelling = true;
-    el._start = performance.now();
+    // Resume from where we paused (0 if never paused)
+    const resumeOffset = el._pausedAt;
+    el._start = performance.now() - resumeOffset;
+
     function tick(now) {
       if (!el._dwelling) return;
       const elapsed = now - el._start;
@@ -396,31 +413,52 @@ function makeDwellBtn(el, onTrigger) {
       fillEl.style.transition = 'none';
       fillEl.style.width = pct + '%';
       if (elapsed >= dwellTime) {
-        el._clicked = true; el._dwelling = false;
+        el._clicked  = true;
+        el._dwelling = false;
+        el._pausedAt = 0;
         fillEl.style.width = '100%';
         el.classList.add('triggered');
         setTimeout(() => el.classList.remove('triggered'), 400);
         onTrigger(el);
-      } else { el._timer = requestAnimationFrame(tick); }
+      } else {
+        el._timer = requestAnimationFrame(tick);
+      }
     }
     el._timer = requestAnimationFrame(tick);
   }
 
-  function stopDwell() {
+  function pauseDwell() {
+    if (!el._dwelling) return;
     el._dwelling = false;
     cancelAnimationFrame(el._timer);
-    if (!el._clicked) {
-      fillEl.style.transition = 'width 0.2s ease';
-      fillEl.style.width = '0%';
-    }
+    // Record how far we got so we can resume
+    el._pausedAt = performance.now() - el._start;
   }
 
-  function onEnter() { el._hovered = true; if (!el._clicked) startDwell(); }
-  function onLeave() {
-    el._hovered = false; el._clicked = false;
-    stopDwell();
-    fillEl.style.transition = 'width 0.2s ease';
+  function cancelGrace() {
+    if (el._graceTimer) { clearTimeout(el._graceTimer); el._graceTimer = null; }
+  }
+
+  function resetFill() {
+    el._pausedAt = 0;
+    fillEl.style.transition = 'width 0.25s ease';
     fillEl.style.width = '0%';
+  }
+
+  function onEnter() {
+    el._hovered = true;
+    if (!el._clicked) startDwell();
+  }
+
+  function onLeave() {
+    el._hovered = false;
+    el._clicked = false; // allow re-trigger after hover-off
+    pauseDwell();
+    // Start grace period — reset fill only if gaze doesn't return
+    cancelGrace();
+    el._graceTimer = setTimeout(() => {
+      resetFill();
+    }, GRACE_MS);
   }
 
   el.addEventListener('mouseenter', onEnter);
@@ -511,22 +549,57 @@ document.getElementById('speed-down').addEventListener('click', () => {
 /* ═══════════════════════════════════════
    WEBGAZER SETUP
    - Starts immediately so calibration clicks register
-   - saveDataAcrossSessions = true (accumulates training data)
-   - Gaze smoothing buffer to reduce jitter
+   - Mouse listeners removed (patient cannot use mouse)
+   - saveDataAcrossSessions = true
 ═══════════════════════════════════════ */
 window.saveDataAcrossSessions = true;
 
 const gazeDot = document.getElementById('gaze-dot');
-const SMOOTH_N = 8;
+let gazeListenerActive = false;
+
+/* ── 1. SMOOTHING — weighted moving average (recent frames weighted more) ──
+   Buffer of last SMOOTH_N raw gaze points.
+   Each point weight = its index+1, so newest points count more.          */
+const SMOOTH_N = 14;
 const gazeBuffer = [];
-let gazeCurrentEl = null;
 
 function smoothGaze(x, y) {
   gazeBuffer.push({ x, y });
   if (gazeBuffer.length > SMOOTH_N) gazeBuffer.shift();
-  const s = gazeBuffer.reduce((a, p) => ({ x: a.x + p.x, y: a.y + p.y }), { x:0, y:0 });
-  return { x: s.x / gazeBuffer.length, y: s.y / gazeBuffer.length };
+  let wx = 0, wy = 0, wt = 0;
+  gazeBuffer.forEach((p, i) => {
+    const w = i + 1; // weight: older=1, newest=SMOOTH_N
+    wx += p.x * w; wy += p.y * w; wt += w;
+  });
+  return { x: wx / wt, y: wy / wt };
 }
+
+/* ── 2. HYSTERESIS — don't leave current button unless gaze has been
+   outside it for LEAVE_FRAMES consecutive frames (~200ms at 30fps).
+   Prevents brief excursions from resetting dwell progress.               */
+const LEAVE_FRAMES = 8;
+let gazeCurrentEl  = null;
+let leaveCounter   = 0;
+
+/* ── 3. GRAVITATIONAL WELL — once inside a button, expand the hit zone
+   by GRAVITY_PX pixels on all sides before counting as "left".
+   Raw gaze needs to travel further to escape the current button.         */
+const GRAVITY_PX = 28;
+
+function isInsideWithGravity(el, x, y) {
+  if (!el) return false;
+  const r = el.getBoundingClientRect();
+  return x >= r.left  - GRAVITY_PX &&
+         x <= r.right + GRAVITY_PX &&
+         y >= r.top   - GRAVITY_PX &&
+         y <= r.bottom + GRAVITY_PX;
+}
+
+/* ── 4. DWELL RESUME — grace period before resetting fill.
+   If gaze re-enters within GRACE_MS, dwell continues from where it left off
+   rather than restarting from 0.
+   Implemented in makeDwellBtn above via _pausedAt / _graceTimer.
+   (See updated makeDwellBtn below — we rebuild it here.)                  */
 
 function dwellBtnAt(x, y) {
   const el = document.elementFromPoint(x, y);
@@ -534,30 +607,49 @@ function dwellBtnAt(x, y) {
   return el.closest('.dwell-btn:not(.disabled)');
 }
 
-let gazeListenerActive = false;
-
 function onGaze(data) {
   if (!data) return;
   const { x, y } = smoothGaze(data.x, data.y);
 
-  // always show gaze dot
   gazeDot.style.display = 'block';
   gazeDot.style.left = x + 'px';
   gazeDot.style.top  = y + 'px';
 
-  if (!gazeListenerActive) return; // don't trigger buttons during calibration
+  if (!gazeListenerActive) return;
 
-  const target = dwellBtnAt(x, y);
-  if (target !== gazeCurrentEl) {
-    if (gazeCurrentEl?._gazeLeave) gazeCurrentEl._gazeLeave();
-    gazeCurrentEl = target;
-    if (gazeCurrentEl?._gazeEnter) gazeCurrentEl._gazeEnter();
+  // What button is the raw smoothed gaze over right now?
+  const rawTarget = dwellBtnAt(x, y);
+
+  if (rawTarget === gazeCurrentEl) {
+    // Still on same button — reset leave counter
+    leaveCounter = 0;
+    return;
   }
+
+  // Gaze is NOT on current button — but is it still within gravity well?
+  if (gazeCurrentEl && isInsideWithGravity(gazeCurrentEl, x, y)) {
+    // Inside gravity well — treat as still hovering, don't count leave
+    leaveCounter = 0;
+    return;
+  }
+
+  // Outside gravity well — increment leave counter (hysteresis)
+  leaveCounter++;
+  if (leaveCounter < LEAVE_FRAMES) return; // not confirmed leave yet
+
+  // Confirmed leave — switch target
+  leaveCounter = 0;
+  if (gazeCurrentEl?._gazeLeave) gazeCurrentEl._gazeLeave();
+  gazeCurrentEl = rawTarget;
+  if (gazeCurrentEl?._gazeEnter) gazeCurrentEl._gazeEnter();
 }
 
 webgazer.setGazeListener(onGaze);
 
 webgazer.begin().then(() => {
+  // ── Remove mouse listeners — patient cannot use mouse ──
+  webgazer.removeMouseEventListeners();
+
   webgazer.showVideoPreview(true);
   webgazer.showPredictionPoints(false);
   webgazer.showFaceOverlay(false);
@@ -565,13 +657,10 @@ webgazer.begin().then(() => {
 
   document.getElementById('cal-status').textContent = '✓ Câmera ativa — clique nos pontos azuis';
 
-  // Move WebGazer's video into our styled calibration preview container
-  // so we can size it properly without clipping
   const wgContainer = document.getElementById('webgazerVideoContainer');
   const calVideoWrap = document.getElementById('cal-video-wrap');
   if (wgContainer && calVideoWrap) {
     calVideoWrap.appendChild(wgContainer);
-    // Override WebGazer's inline positioning now that it's inside our container
     wgContainer.style.cssText = 'position:relative!important;top:auto!important;left:auto!important;width:100%!important;height:100%!important;opacity:1!important;border:none!important;border-radius:0!important;';
   }
 }).catch(err => {
