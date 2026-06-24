@@ -565,12 +565,16 @@ function initGazeCloud() {
   };
 
   GazeCloudAPI.OnCamDenied = function () {
+    // Bring back the overlay so the user can see the error message
+    document.getElementById('startup-overlay').style.display = 'flex';
     status.textContent = '⚠ Câmera negada — verifique as permissões do browser.';
     document.getElementById('btn-start-gaze').disabled = false;
   };
 
   GazeCloudAPI.OnError = function (msg) {
     console.warn('GazeCloud error:', msg);
+    // Bring back the overlay so the user can see the error message
+    document.getElementById('startup-overlay').style.display = 'flex';
     status.textContent = '⚠ Erro: ' + msg;
     // Show domain registration hint if it looks like an auth error
     if (msg && (msg.includes('domain') || msg.includes('origin') || msg.includes('register') || msg.includes('unauthorized'))) {
@@ -604,8 +608,11 @@ function initGazeCloud() {
   status.textContent = 'Iniciando câmera e calibração…';
   document.getElementById('btn-start-gaze').disabled = true;
 
+  
   try {
     GazeCloudAPI.StartEyeTracking();
+    // Hide the overlay immediately so it doesn't block GazeCloud's UI elements
+    document.getElementById('startup-overlay').style.display = 'none';
   } catch(e) {
     status.textContent = '⚠ GazeCloudAPI não carregou. Verifique a ligação à internet.';
     document.getElementById('btn-start-gaze').disabled = false;
